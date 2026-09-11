@@ -47,9 +47,8 @@ const pageSlide = {
 /**
  * The five-up strip, composited in the browser: each screenshot tile is the
  * raw device capture inside the bezel art on the chosen background, laid out
- * with the exact geometry the CLI renders with (src/frame.ts), so what you see
- * is what an export renders. Background and frame arrive as props from React
- * state - changing them repaints instantly, no CLI involved. The preview tile
+ * with the same geometry used by full-resolution browser export. Background
+ * and frame arrive as props from React state and repaint instantly. The preview tile
  * plays the raw clips as they are: Apple requires a plain screen recording.
  *
  * The App Store allows up to ten screenshots; the strip shows five tiles at a
@@ -64,7 +63,7 @@ const pageSlide = {
  *
  * In the lightbox the headline and subhead are editable in place; a change
  * is reported through onCopy for the current locale and layered over the
- * config's copy here and in the CLI, via goldie.design.json.
+ * project's config copy and browser export.
  *
  * Screenshot tiles can be dragged into a new order; the resulting scene id
  * list is reported through onReorder and saved the same way, so an export
@@ -114,7 +113,7 @@ export function Strip({
     order.length > 0
       ? [...design.scenes].sort((a, b) => rankOf(order, a.id) - rankOf(order, b.id))
       : design.scenes;
-  // The same resolution the CLI runs, on the scenes in their displayed order.
+  // Resolve layouts at the same resolution used by browser export.
   const resolved = resolveScenes(scenes, {
     template: Array.isArray(template)
       ? (template as LayoutKey[])
@@ -138,7 +137,7 @@ export function Strip({
   const defaultLayoutOf = (scene: DesignScene) =>
     unforced.find((r) => r.scene.id === scene.id)!.layout.key;
 
-  // Mirrors the CLI's --background handling: a dark background flips the copy
+  // A dark background flips the copy
   // to light, a light background flips light copy colors to dark, and
   // per-scene background overrides are dropped, so the export matches what
   // is on screen.
@@ -365,6 +364,20 @@ export function Strip({
 
   return (
     <div className="flex w-full flex-col gap-3">
+      <div className="pointer-events-none fixed top-0 -left-[100000px]" aria-hidden>
+        {entries
+          .filter((entry) => entry.editable)
+          .map((entry, index) => (
+            <div
+              key={`export-${entry.key}`}
+              data-export-tile
+              data-export-name={`${String(index + 1).padStart(2, "0")}-${entry.key.replace("#", "-")}.png`}
+              style={{ position: "relative", width: entry.width, height: entry.height }}
+            >
+              {entry.scene(false)}
+            </div>
+          ))}
+      </div>
       <div className="relative">
         {/* Clips only horizontally, so a sliding page vanishes at the strip's
             edge while tile shadows and the hover lift stay visible; the small

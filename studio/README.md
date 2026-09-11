@@ -1,8 +1,8 @@
 # Goldie Studio
 
-The Studio is a self-contained Vite application. It starts with bundled demo
-data and does not require a Goldie config, generated manifest, or the parent
-repository's source files.
+The Studio is a self-contained, upload-first Vite application. It starts with
+bundled demo data and does not require a simulator, capture flow, generated
+manifest, or the parent repository's source files.
 
 ```bash
 bun install
@@ -10,11 +10,9 @@ bun run dev
 ```
 
 Open <http://localhost:4321>. Demo design changes are saved in browser local
-storage. Export is disabled because rendering requires a connected Goldie CLI.
+storage. Create a project from the project picker, upload PNG, JPEG or WebP
+screenshots, adjust the design, and export a ZIP directly in the browser.
 
-To show a real generated manifest instead of the demo, point the development
-server at its web directory:
-
-```bash
-GOLDIE_WEB_DIR=/absolute/path/to/out/web bun run dev
-```
+Each project lives under `workspace/projects/<id>/` with its own managed
+`goldie.config.ts` and `screenshots/` directory. `workspace/` is ignored by
+Git. Set `GOLDIE_STUDIO_WORKSPACE` to store projects somewhere else.

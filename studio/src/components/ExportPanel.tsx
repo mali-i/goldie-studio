@@ -1,81 +1,55 @@
 import { DownloadIcon, Loader2Icon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { zipSync } from "fflate";
+import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/button";
-import { CUSTOM_TEMPLATE } from "../App";
 
-/**
- * The one place the goldie CLI runs: Export re-renders the screenshots and
- * the preview video from the raw captures with the current design, zips them,
- * and hands the browser the zip. Streams the CLI log while it runs (the video
- * render takes a while). Served by `goldie studio` and the Vite dev server alike (src/studio-server.ts).
- */
+/** Renders the off-screen full-resolution tiles and packages them in the browser. */
 export function ExportPanel({
   demo,
-  background,
-  frame,
-  font,
-  template,
-  layout,
-  screenOnly,
+  hasScreens,
+  device,
+  locale,
 }: {
   demo: boolean;
-  background: string;
-  frame: string;
-  /** A --font key, or undefined to keep the config's font. */
-  font: string | undefined;
-  /** A built-in template key, "" for none, or the custom sentinel (left to the sidecar/config). */
-  template: string;
-  layout: string;
-  screenOnly: boolean;
+  hasScreens: boolean;
+  device: string;
+  locale: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string | null>(null);
-  const logRef = useRef<HTMLPreElement>(null);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll whenever the log text changes
-  useEffect(() => {
-    logRef.current?.scrollTo(0, logRef.current.scrollHeight);
-  }, [log]);
 
   async function exportZip() {
     if (busy) return;
     setBusy(true);
-    setLog("");
-    let text = "";
+    setLog("Preparing screenshots…");
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          background,
-          frame,
-          font,
-          template: template === CUSTOM_TEMPLATE ? undefined : template || "none",
-          layout,
-          screenOnly,
-        }),
-      });
-      if (!res.ok || !res.body) {
-        setLog(`${res.status}: ${await res.text()}`);
-        return;
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-export-tile]"));
+      if (nodes.length === 0) throw new Error("Upload at least one screenshot before exporting.");
+      const files: Record<string, Uint8Array> = {};
+      for (const [index, node] of nodes.entries()) {
+        setLog(`Rendering ${index + 1} of ${nodes.length}…`);
+        const blob = await toBlob(node, {
+          cacheBust: true,
+          pixelRatio: 1,
+          width: node.offsetWidth,
+          height: node.offsetHeight,
+        });
+        if (!blob) throw new Error("The browser could not render a screenshot.");
+        const name = node.dataset.exportName ?? `screenshot-${index + 1}.png`;
+        files[`${device}/${locale}/${name}`] = new Uint8Array(await blob.arrayBuffer());
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        text += decoder.decode(value, { stream: true });
-        setLog(text);
-      }
-      if (text.includes("[done]")) {
-        setLog(null);
-        const a = document.createElement("a");
-        a.href = "/api/export/download";
-        a.download = "";
-        a.click();
-      }
-    } catch (err) {
-      setLog(`${text}\n${err instanceof Error ? err.message : err}`);
+      setLog("Creating ZIP…");
+      const zip = zipSync(files, { level: 6 });
+      const url = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "goldie-screenshots.zip";
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setLog(null);
+    } catch (error) {
+      setLog(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
@@ -83,25 +57,18 @@ export function ExportPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      {log !== null && !busy ? (
-        <p className="text-[12px] text-destructive">Export failed.</p>
-      ) : null}
-
+      {log !== null && !busy ? <p className="text-[12px] text-destructive">Export failed.</p> : null}
       {log !== null ? (
-        <pre
-          ref={logRef}
-          className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-2 font-mono text-[10px] leading-relaxed text-muted-foreground"
-        >
-          {log || "Starting…"}
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+          {log}
         </pre>
       ) : null}
-
       <Button
         size="lg"
         className="w-full"
         onClick={() => void exportZip()}
-        disabled={busy || demo}
-        title={demo ? "Connect a Goldie project to export rendered assets." : undefined}
+        disabled={busy || demo || !hasScreens}
+        title={demo ? "Create a workspace project to export screenshots." : undefined}
       >
         {busy ? (
           <>
@@ -110,10 +77,12 @@ export function ExportPanel({
           </>
         ) : demo ? (
           <>Demo mode</>
+        ) : !hasScreens ? (
+          <>Upload screenshots</>
         ) : (
           <>
             <DownloadIcon />
-            Export screenshots
+            Export current device
           </>
         )}
       </Button>

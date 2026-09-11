@@ -1,19 +1,17 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { workspacePlugin } from "./server/workspace";
 
 declare const process: { env: Record<string, string | undefined> };
 
 const SRC_DIR = new URL("./src", import.meta.url).pathname;
+const WORKSPACE_DIR = process.env.GOLDIE_STUDIO_WORKSPACE ?? new URL("./workspace", import.meta.url).pathname;
 
-/**
- * Standalone development always has a complete demo under public/. A caller
- * can point GOLDIE_WEB_DIR at a generated out/web directory to preview real
- * data without creating a source-code dependency on the Goldie repository.
- */
+/** Standalone development always has a complete demo and a local workspace. */
 export default defineConfig(() => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), workspacePlugin(WORKSPACE_DIR)],
   resolve: { alias: { "@": SRC_DIR } },
-  publicDir: process.env.GOLDIE_WEB_DIR ?? "public",
+  publicDir: "public",
   server: { port: 4321, open: true },
 }));

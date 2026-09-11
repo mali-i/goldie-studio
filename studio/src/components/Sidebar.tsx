@@ -2,6 +2,7 @@ import {
   type LucideIcon,
   MoonIcon,
   PlayIcon,
+  PlusIcon,
   SmartphoneIcon,
   SunIcon,
   TabletIcon,
@@ -20,8 +21,11 @@ import {
 import { cn } from "@/lib/utils";
 import type { Platform } from "../App";
 import type { StoreManifest } from "../manifest";
+import type { ProjectSummary } from "../project";
 import { DesignPanel } from "./DesignPanel";
 import { ExportPanel } from "./ExportPanel";
+import { ProjectScreens } from "./ProjectScreens";
+import { ProjectSettings } from "./ProjectSettings";
 
 /**
  * The device-type rows, in display order. An entry without a platform renders
@@ -45,6 +49,12 @@ const DEVICE_TYPES: Array<{
  * controls, and a sticky Export footer.
  */
 export function Sidebar({
+  projectId,
+  projects,
+  demo,
+  onProject,
+  onNewProject,
+  onAssetsChanged,
   manifest,
   platform,
   device,
@@ -67,6 +77,12 @@ export function Sidebar({
   onLayout,
   onScreenOnly,
 }: {
+  projectId: string;
+  projects: ProjectSummary[];
+  demo: boolean;
+  onProject: (id: string) => void;
+  onNewProject: () => void;
+  onAssetsChanged: () => void;
   manifest: StoreManifest;
   platform: Platform;
   device: string;
@@ -105,6 +121,22 @@ export function Sidebar({
           {dark ? <SunIcon /> : <MoonIcon />}
         </Button>
       </header>
+
+      <div className="flex items-center gap-2 border-y border-sidebar-border px-4 py-3">
+        <Select
+          value={projectId}
+          onChange={onProject}
+          options={[
+            ["demo", "Daylight Demo"],
+            ...projects.map((project): [string, string] => [project.id, project.name]),
+          ]}
+          size="sm"
+          className="min-w-0 flex-1"
+        />
+        <Button variant="outline" size="icon-sm" onClick={onNewProject} aria-label="New project">
+          <PlusIcon />
+        </Button>
+      </div>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">
         {/* Both stores always show, so an iOS-only setup still surfaces that
@@ -166,6 +198,16 @@ export function Sidebar({
             ) : null}
           </div>
         ) : null}
+        <ProjectSettings projectId={projectId} demo={demo} onChanged={onAssetsChanged} />
+        <ProjectScreens
+          projectId={projectId}
+          demo={demo}
+          device={device}
+          locale={locale}
+          scenes={manifest.design.scenes}
+          captures={manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device]}
+          onChanged={onAssetsChanged}
+        />
         <DesignPanel
           design={manifest.design}
           deviceFrame={
@@ -188,27 +230,17 @@ export function Sidebar({
 
       <footer className="shrink-0 bg-sidebar p-4">
         <ExportPanel
-          demo={manifest.demo === true}
-          background={background}
-          frame={frame}
-          font={fontKey(manifest.design, fontFamily)}
-          template={template}
-          layout={layout}
-          screenOnly={screenOnly}
+          demo={demo}
+          device={device}
+          locale={locale}
+          hasScreens={Boolean(
+            (manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device])
+              ?.screenshots.length,
+          )}
         />
       </footer>
     </aside>
   );
-}
-
-/**
- * The CLI's --font key for the current font stack: a bundled font's key when
- * the stack names its family, "system" when it is the config's own stack
- * (the CLI then leaves theme.fontFamily alone), else undefined.
- */
-function fontKey(design: StoreManifest["design"], fontFamily: string): string | undefined {
-  if (fontFamily === design.theme.fontFamily) return undefined;
-  return design.fonts.find((f) => fontFamily.startsWith(`"${f.family}"`))?.key ?? "system";
 }
 
 export function Field({

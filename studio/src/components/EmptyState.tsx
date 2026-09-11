@@ -2,11 +2,7 @@ import { CheckIcon, CopyIcon, type LucideIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-/**
- * Centered stage placeholder for the states where the strip has nothing to
- * composite: assets not generated, a platform not configured, a device not
- * captured yet. Each names the next CLI step in a copyable command chip.
- */
+/** Centered stage placeholder for states where the strip has nothing to show. */
 export function EmptyState({
   icon: Icon,
   title,

@@ -70,6 +70,8 @@ export type Design = {
   /** null when the config points at custom bezel art. */
   frameVariant: string | null;
   frameVariants: string[];
+  /** Standalone Studio may map a frame key to any same-origin asset URL. */
+  frameAssets?: Record<string, string>;
   customFrameUrl: string | null;
   /** Bundled typefaces with the @font-face sources to declare. */
   fonts: BundledFont[];
@@ -86,8 +88,10 @@ export type Design = {
     sceneId: string;
     segments: Array<{ id: string }>;
   } | null;
-  /** Raw capture urls per device key; a device is absent until `goldie capture` ran. */
+  /** Screenshot source URLs per device key. */
   captures: Record<string, DeviceCaptures>;
+  /** Upload projects can provide a different source image for each locale. */
+  capturesByLocale?: Record<string, Record<string, DeviceCaptures>>;
 };
 
 export type StoreManifest = {
@@ -110,7 +114,7 @@ export type StoreManifest = {
   design: Design;
 };
 
-/** A load failure with the CLI command that fixes it, for the empty state. */
+/** A load failure with an optional recovery command for legacy demo data. */
 export class ManifestError extends Error {
   constructor(
     message: string,
@@ -120,7 +124,14 @@ export class ManifestError extends Error {
   }
 }
 
-export async function loadManifest(): Promise<StoreManifest> {
+export async function loadManifest(projectId?: string): Promise<StoreManifest> {
+  if (projectId && projectId !== "demo") {
+    const project = await fetch(`/api/projects/${encodeURIComponent(projectId)}/manifest`, {
+      cache: "no-store",
+    });
+    if (!project.ok) throw new Error((await project.text()) || `Loading project failed (${project.status}).`);
+    return cacheBust((await project.json()) as StoreManifest);
+  }
   let res = await fetch("/store.json", { cache: "no-store" });
   if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
     res = await fetch("/demo/store.json", { cache: "no-store" });
@@ -142,15 +153,25 @@ export async function loadManifest(): Promise<StoreManifest> {
   // Raw captures keep their names across a re-capture, so the manifest's
   // timestamp becomes a cache-buster - a capture followed by a manifest
   // reload shows new pixels.
+  return cacheBust(manifest);
+}
+
+function cacheBust(manifest: StoreManifest): StoreManifest {
   const v = `?v=${Date.parse(manifest.generatedAt) || 0}`;
   for (const captures of Object.values(manifest.design.captures)) {
     for (const shot of captures.screenshots) shot.url += v;
     for (const clip of captures.clips ?? []) clip.url += v;
   }
+  for (const locales of Object.values(manifest.design.capturesByLocale ?? {})) {
+    for (const captures of Object.values(locales)) {
+      for (const shot of captures.screenshots) shot.url += v;
+      for (const clip of captures.clips ?? []) clip.url += v;
+    }
+  }
   return manifest;
 }
 
-/** The design choices saved on disk next to the config; see src/studio-server.ts. */
+/** Design choices persisted into a project config, or localStorage for Demo. */
 export type SavedDesign = {
   background?: string;
   frame?: string;
@@ -173,7 +194,15 @@ export type SceneCopy = {
   subhead?: Record<string, string>;
 };
 
-export async function loadDesign(): Promise<SavedDesign> {
+export async function loadDesign(projectId?: string): Promise<SavedDesign> {
+  if (projectId && projectId !== "demo") {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/design`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Could not load project design (${res.status}).`);
+    const parsed = await res.json();
+    return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
+  }
   try {
     const res = await fetch("/api/design", { cache: "no-store" });
     if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
@@ -186,7 +215,16 @@ export async function loadDesign(): Promise<SavedDesign> {
   }
 }
 
-export async function saveDesign(design: SavedDesign): Promise<void> {
+export async function saveDesign(design: SavedDesign, projectId?: string): Promise<void> {
+  if (projectId && projectId !== "demo") {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/design`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(design),
+    });
+    if (!res.ok) throw new Error(`Could not save project design (${res.status}).`);
+    return;
+  }
   try {
     const res = await fetch("/api/design", {
       method: "PUT",

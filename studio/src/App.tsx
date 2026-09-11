@@ -4,6 +4,8 @@ import { EmptyState } from "./components/EmptyState";
 import { Sidebar } from "./components/Sidebar";
 import { Strip } from "./components/Strip";
 import { useHistory } from "./lib/useHistory";
+import { projectApi } from "./project-api";
+import type { ProjectSummary } from "./project";
 import {
   type BundledFont,
   type Design,
@@ -22,26 +24,20 @@ export const CUSTOM_TEMPLATE = "__custom__";
 
 export type Platform = "ios" | "android";
 
-/**
- * Shown when a store's tab is selected but its device is not in the config.
- * The chip holds the ask to hand a coding agent, which knows the config
- * changes and capture steps from the goldie skill.
- */
+/** Shown when a store tab has no configured upload target. */
 const ENABLE_PLATFORM: Record<
   Platform,
-  { icon: LucideIcon; title: string; body: string; command: string }
+  { icon: LucideIcon; title: string; body: string }
 > = {
   ios: {
     icon: SmartphoneIcon,
     title: "No App Store screenshots yet",
-    body: "Ask your coding agent to set them up:",
-    command: "create App Store screenshots using goldie",
+    body: "Choose an iPhone in Project settings, then upload screenshots.",
   },
   android: {
     icon: SmartphoneIcon,
     title: "No Google Play screenshots yet",
-    body: "Ask your coding agent to set them up:",
-    command: "create Google Play screenshots using goldie",
+    body: "Choose an Android device in Project settings, then upload screenshots.",
   },
 };
 
@@ -49,16 +45,45 @@ const ENABLE_PLATFORM: Record<
 const SAVE_DEBOUNCE_MS = 500;
 
 export function App() {
+  const [projectId, setProjectId] = useState(initialProjectId);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [revision, setRevision] = useState(0);
   const [loaded, setLoaded] = useState<{ manifest: StoreManifest; design: SavedDesign } | null>(
     null,
   );
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    Promise.all([loadManifest(), loadDesign()])
+    projectApi.list().then(setProjects).catch(() => setProjects([]));
+    const pop = () => setProjectId(projectIdFromLocation() ?? "demo");
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
+
+  useEffect(() => {
+    setLoaded(null);
+    setError(null);
+    Promise.all([loadManifest(projectId), loadDesign(projectId)])
       .then(([manifest, design]) => setLoaded({ manifest, design }))
       .catch((e: Error) => setError(e));
-  }, []);
+  }, [projectId, revision]);
+
+  const selectProject = (id: string) => {
+    window.history.pushState({}, "", `/projects/${encodeURIComponent(id)}`);
+    localStorage.setItem("goldie-studio:last-project", id);
+    setProjectId(id);
+  };
+  const createProject = async () => {
+    const name = window.prompt("Project name", "Untitled App")?.trim();
+    if (!name) return;
+    try {
+      const created = await projectApi.create(name);
+      setProjects((current) => [created.project, ...current]);
+      selectProject(created.project.id);
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error(String(e)));
+    }
+  };
 
   if (error)
     return (
@@ -70,24 +95,62 @@ export function App() {
       />
     );
   if (!loaded) return null;
-  return <Loaded manifest={loaded.manifest} saved={loaded.design} />;
+  return (
+    <Loaded
+      key={projectId}
+      projectId={projectId}
+      projects={projects}
+      manifest={loaded.manifest}
+      saved={loaded.design}
+      onProject={selectProject}
+      onNewProject={() => void createProject()}
+      onAssetsChanged={() => {
+        setRevision((value) => value + 1);
+        projectApi.list().then(setProjects).catch(() => {});
+      }}
+    />
+  );
+}
+
+function projectIdFromLocation(): string | null {
+  const match = window.location.pathname.match(/^\/projects\/([^/]+)\/?$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function initialProjectId(): string {
+  return projectIdFromLocation() ?? localStorage.getItem("goldie-studio:last-project") ?? "demo";
 }
 
 /**
  * All design state lives here as plain React state: the strip composites the
  * scenes in the browser, so a background or frame change repaints instantly.
- * The CLI only runs when the sidebar's Export button asks for the final files.
  *
  * Two things survive a reload. The design choices (background, frame, font,
  * layout and screen-only mode, per-scene layout overrides, copy edited in the
  * lightbox, the order tiles were dragged into)
- * are written to goldie.design.json next to the config, debounced, so the
- * CLI picks them up too. The view choices (platform, device, locale, dark) only matter
- * here and live in localStorage under the app's name. Either falls back to
+ * are written into the workspace project's goldie.config.ts, debounced. Demo
+ * choices stay in browser localStorage. View choices (platform, device,
+ * locale, dark) also live in localStorage under the app's name and fall back to
  * the config when a stored value no longer applies (a device or frame
  * variant removed from the config, for instance).
  */
-function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesign }) {
+function Loaded({
+  projectId,
+  projects,
+  manifest,
+  saved,
+  onProject,
+  onNewProject,
+  onAssetsChanged,
+}: {
+  projectId: string;
+  projects: ProjectSummary[];
+  manifest: StoreManifest;
+  saved: SavedDesign;
+  onProject: (id: string) => void;
+  onNewProject: () => void;
+  onAssetsChanged: () => void;
+}) {
   const design = manifest.design;
   const view = loadView(manifest.app.name);
   // Both store tabs render even when only one platform is configured, so the
@@ -177,10 +240,8 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
     storeView(manifest.app.name, { platform, device, locale, dark });
   }, [manifest.app.name, platform, device, locale, dark]);
 
-  // Write the design to disk once it has sat still for a moment; a drag on
-  // the gradient picker fires many changes a second. Skips the initial mount
-  // so opening the studio never creates the file by itself. An empty frame
-  // means the config's custom bezel art, which has nothing to save.
+  // Write the design once it has sat still for a moment; a drag on the
+  // gradient picker fires many changes a second. Skips the initial mount.
   const [saveError, setSaveError] = useState<string | null>(null);
   const mounted = useRef(false);
   useEffect(() => {
@@ -198,14 +259,14 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
         template: template === CUSTOM_TEMPLATE ? undefined : template,
         layout,
         screenOnly,
-        sceneLayouts: Object.keys(sceneLayouts).length > 0 ? sceneLayouts : undefined,
-      }).then(
+        sceneLayouts,
+      }, projectId).then(
         () => setSaveError(null),
         (e: Error) => setSaveError(e.message),
       );
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts]);
+  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts, projectId]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -229,14 +290,24 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
 
   const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   const spec = platformDevices.find((d) => d.key === device) ?? platformDevices[0];
-  const captures = spec ? design.captures[spec.key] : undefined;
-  const frameUrl = frame
-    ? `frames/${frame}.png`
-    : (design.customFrameUrl ?? `frames/${design.frameVariants[0]}.png`);
+  const captures = spec
+    ? (design.capturesByLocale?.[spec.key]?.[locale] ?? design.captures[spec.key])
+    : undefined;
+  const frameUrl = spec?.platform === "android"
+    ? ""
+    : frame
+      ? (design.frameAssets?.[frame] ?? `frames/${frame}.png`)
+      : (design.customFrameUrl ?? `frames/${design.frameVariants[0]}.png`);
 
   return (
     <div className="flex h-full bg-stage p-3 text-foreground">
       <Sidebar
+        projectId={projectId}
+        projects={projects}
+        demo={manifest.demo === true}
+        onProject={onProject}
+        onNewProject={onNewProject}
+        onAssetsChanged={onAssetsChanged}
         manifest={manifest}
         platform={platform}
         device={device}
@@ -262,7 +333,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
 
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="relative grid flex-1 place-items-center overflow-auto p-10">
-          {spec && captures ? (
+          {spec && captures && captures.screenshots.length > 0 ? (
             <div className="w-full max-w-[1400px]">
               <Strip
                 design={design}
@@ -291,8 +362,11 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
             <EmptyState
               icon={CameraIcon}
               title={`No screenshots for the ${deviceLabel(spec)} yet`}
-              body={`Ask your coding agent to capture the ${deviceLabel(spec)}, or run:`}
-              command="goldie capture && goldie manifest"
+              body={
+                manifest.demo
+                  ? "Create a workspace project to upload and edit your own screenshots."
+                  : "Use Upload screenshots in the sidebar to add PNG, JPEG or WebP files."
+              }
             />
           ) : (
             <EmptyState {...ENABLE_PLATFORM[platform]} />
@@ -305,7 +379,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
   );
 }
 
-/** Everything the undo stack tracks: the design choices saved to goldie.design.json. */
+/** Everything the undo stack tracks and persists for the active project. */
 type DesignState = {
   background: string;
   frame: string;
