@@ -188,6 +188,7 @@ export function Sidebar({
 
       <footer className="shrink-0 bg-sidebar p-4">
         <ExportPanel
+          demo={manifest.demo === true}
           background={background}
           frame={frame}
           font={fontKey(manifest.design, fontFamily)}

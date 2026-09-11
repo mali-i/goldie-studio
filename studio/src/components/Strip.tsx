@@ -13,7 +13,7 @@ import {
   resolveScenes,
   SCREEN_SHADOW,
   TYPE,
-} from "../../../src/layouts";
+} from "../lib/layouts";
 import type {
   Decoration,
   Design,

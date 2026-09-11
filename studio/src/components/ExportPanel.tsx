@@ -10,6 +10,7 @@ import { CUSTOM_TEMPLATE } from "../App";
  * render takes a while). Served by `goldie studio` and the Vite dev server alike (src/studio-server.ts).
  */
 export function ExportPanel({
+  demo,
   background,
   frame,
   font,
@@ -17,6 +18,7 @@ export function ExportPanel({
   layout,
   screenOnly,
 }: {
+  demo: boolean;
   background: string;
   frame: string;
   /** A --font key, or undefined to keep the config's font. */
@@ -94,12 +96,20 @@ export function ExportPanel({
         </pre>
       ) : null}
 
-      <Button size="lg" className="w-full" onClick={() => void exportZip()} disabled={busy}>
+      <Button
+        size="lg"
+        className="w-full"
+        onClick={() => void exportZip()}
+        disabled={busy || demo}
+        title={demo ? "Connect a Goldie project to export rendered assets." : undefined}
+      >
         {busy ? (
           <>
             <Loader2Icon className="animate-spin" />
             Exporting…
           </>
+        ) : demo ? (
+          <>Demo mode</>
         ) : (
           <>
             <DownloadIcon />

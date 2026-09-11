@@ -1,48 +1,19 @@
-import { join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin, type ViteDevServer } from "vite";
-import { designHandler, exportHandler, type StudioApi, studioPaths } from "../src/studio-server.ts";
+import { defineConfig } from "vite";
 
-const SRC_DIR = resolve(import.meta.dirname, "src");
-const GOLDIE_ROOT = resolve(import.meta.dirname, "..");
+declare const process: { env: Record<string, string | undefined> };
 
-// GOLDIE_CONFIG points at a config outside this repo; out/ and the design
-// sidecar live next to it.
-const CONFIG = process.env.GOLDIE_CONFIG
-  ? resolve(process.env.GOLDIE_CONFIG)
-  : join(GOLDIE_ROOT, "goldie.config.ts");
-const PATHS = studioPaths(CONFIG);
+const SRC_DIR = new URL("./src", import.meta.url).pathname;
 
 /**
- * Dev server: `out/web` is the static root - the manifest, the bezel art and
- * symlinks to the raw captures and finished assets, all served from `/`.
- * Nothing is copied into the studio, so a re-run of `goldie capture` shows
- * up on reload. Run `goldie manifest` first; the directory does not exist
- * before that. `fs.allow` covers the goldie root because the studio imports
- * src/layouts.ts for the shared geometry.
- *
- * Build: no publicDir, so studio/dist is just the app shell. `goldie studio`
- * serves it together with the app's out/web and the same API (see
- * src/studio-server.ts); that is what the npm package ships.
+ * Standalone development always has a complete demo under public/. A caller
+ * can point GOLDIE_WEB_DIR at a generated out/web directory to preview real
+ * data without creating a source-code dependency on the Goldie repository.
  */
-export default defineConfig(({ command }) => ({
-  plugins: [react(), tailwindcss(), goldieApi()],
+export default defineConfig(() => ({
+  plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": SRC_DIR } },
-  publicDir: command === "build" ? false : PATHS.webDir,
-  server: { port: 4321, open: true, fs: { allow: [GOLDIE_ROOT, PATHS.outDir] } },
+  publicDir: process.env.GOLDIE_WEB_DIR ?? "public",
+  server: { port: 4321, open: true },
 }));
-
-/** Mounts the shared /api handlers on the dev server, running the CLI from source. */
-function goldieApi(): Plugin {
-  const api: StudioApi = { paths: PATHS, cli: ["bun", join(GOLDIE_ROOT, "src", "cli.ts")] };
-  const design = designHandler(api);
-  const exp = exportHandler(api);
-  return {
-    name: "goldie-api",
-    configureServer(server: ViteDevServer) {
-      server.middlewares.use("/api/design", design);
-      server.middlewares.use("/api/export", (req, res) => exp(req.url ?? "")(req, res));
-    },
-  };
-}

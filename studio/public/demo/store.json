@@ -1,0 +1,87 @@
+{
+  "demo": true,
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "app": {
+    "name": "Daylight",
+    "subtitle": { "en-US": "Make space for what matters" },
+    "developer": "Goldie Labs",
+    "category": "Productivity",
+    "rating": 4.9,
+    "ratingCount": "2.4K Ratings",
+    "ageRating": "4+",
+    "price": "Free",
+    "description": { "en-US": "A calm place to plan your day, build focus, and celebrate progress." }
+  },
+  "devices": [
+    {
+      "key": "iphone-6.9",
+      "label": "iPhone 6.9",
+      "platform": "ios",
+      "simulatorName": "iPhone 16 Pro Max",
+      "screenshot": { "width": 1320, "height": 2868 },
+      "preview": { "width": 886, "height": 1920 },
+      "frame": null
+    }
+  ],
+  "locales": ["en-US"],
+  "assets": { "iphone-6.9": { "en-US": { "screenshots": [], "preview": null } } },
+  "design": {
+    "theme": {
+      "background": "linear-gradient(160deg, #FFF2C7 0%, #FFF9EA 58%, #FFFFFF 100%)",
+      "headlineColor": "#2A2419",
+      "subheadColor": "#74674F",
+      "fontFamily": "-apple-system, \"SF Pro Display\", system-ui, sans-serif",
+      "copyHeightRatio": 0.24,
+      "deviceWidthRatio": 0.84
+    },
+    "frameVariant": null,
+    "frameVariants": [],
+    "customFrameUrl": "demo/frame.svg",
+    "fonts": [],
+    "layouts": [
+      { "key": "classic", "label": "Classic", "description": "Centred copy above a centred device.", "span": 1 },
+      { "key": "copy-below", "label": "Copy below", "description": "Device hanging from the top edge, copy underneath.", "span": 1 },
+      { "key": "hero", "label": "Hero", "description": "Copy on top, a large device running off the bottom.", "span": 1 },
+      { "key": "offset", "label": "Offset", "description": "Left-aligned copy, device pushed to the bottom right.", "span": 1 },
+      { "key": "tilt", "label": "Tilt", "description": "Copy on top, device tilted and running off the bottom.", "span": 1 },
+      { "key": "tilt-right", "label": "Tilt right", "description": "Left-aligned copy and a tilted device.", "span": 1 },
+      { "key": "duo", "label": "Duo", "description": "Two screens layered front to back.", "span": 1 },
+      { "key": "duo-tilt", "label": "Duo tilt", "description": "Two tilted screens stepping diagonally.", "span": 1 },
+      { "key": "panorama", "label": "Panorama", "description": "One device crossing a two-tile seam.", "span": 2 },
+      { "key": "panorama-duo", "label": "Panorama duo", "description": "Two screens sharing a panorama.", "span": 2 },
+      { "key": "minimal", "label": "Minimal", "description": "No copy, just the device.", "span": 1 }
+    ],
+    "templates": [
+      { "key": "uniform", "label": "Uniform", "description": "One layout throughout.", "sequence": [] },
+      { "key": "editorial", "label": "Editorial", "description": "A varied story-led strip.", "sequence": ["panorama", "hero", "offset", "minimal", "tilt"] },
+      { "key": "showcase", "label": "Showcase", "description": "Large devices with paired screens.", "sequence": ["hero", "tilt", "duo", "tilt-right", "minimal"] },
+      { "key": "magazine", "label": "Magazine", "description": "Editorial copy and strong rhythm.", "sequence": ["offset", "copy-below", "tilt-right", "hero", "minimal"] },
+      { "key": "storyboard", "label": "Storyboard", "description": "A sequence focused on product flow.", "sequence": ["panorama-duo", "copy-below", "hero", "minimal", "tilt"] },
+      { "key": "dynamic", "label": "Dynamic", "description": "Tilted, energetic compositions.", "sequence": ["tilt", "duo-tilt", "panorama", "minimal", "tilt-right"] }
+    ],
+    "template": "showcase",
+    "layout": "classic",
+    "screenOnly": false,
+    "decorations": [],
+    "scenes": [
+      { "id": "today", "headline": { "en-US": "Own your day" }, "subhead": { "en-US": "Everything important, beautifully in view." } },
+      { "id": "focus", "headline": { "en-US": "Find your focus" }, "subhead": { "en-US": "Quiet the noise and start what matters." } },
+      { "id": "habits", "headline": { "en-US": "Small steps add up" }, "subhead": { "en-US": "Build routines that feel natural." } },
+      { "id": "insights", "headline": { "en-US": "See your momentum" }, "subhead": { "en-US": "Gentle insights keep you moving." } },
+      { "id": "calm", "headline": { "en-US": "End the day lighter" }, "subhead": { "en-US": "Reflect, reset, and make room for tomorrow." } }
+    ],
+    "preview": null,
+    "captures": {
+      "iphone-6.9": {
+        "screenshots": [
+          { "sceneId": "today", "url": "demo/capture-today.svg" },
+          { "sceneId": "focus", "url": "demo/capture-focus.svg" },
+          { "sceneId": "habits", "url": "demo/capture-habits.svg" },
+          { "sceneId": "insights", "url": "demo/capture-insights.svg" },
+          { "sceneId": "calm", "url": "demo/capture-calm.svg" }
+        ],
+        "clips": null
+      }
+    }
+  }
+}

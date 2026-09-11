@@ -4,7 +4,7 @@ import {
   LAYOUTS,
   type LayoutKey,
   type LayoutSpec,
-} from "../../../src/layouts";
+} from "../lib/layouts";
 
 /**
  * Miniature pictures of a template's strip, drawn from the same compose()

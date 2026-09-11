@@ -60,7 +60,7 @@
     "frame": "bun src/cli.ts frame",
     "preview": "bun src/cli.ts preview",
     "all": "bun src/cli.ts all",
-    "studio": "bun src/cli.ts manifest && cd studio && bun install --silent && bun run dev",
+    "studio": "bun run build:studio && bun src/cli.ts studio",
     "studio:build": "bun run build:studio",
     "format": "biome format --write .",
     "lint": "biome lint .",

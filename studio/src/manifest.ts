@@ -91,6 +91,8 @@ export type Design = {
 };
 
 export type StoreManifest = {
+  /** True for the assets bundled with the standalone Studio. */
+  demo?: boolean;
   generatedAt: string;
   app: {
     name: string;
@@ -119,10 +121,13 @@ export class ManifestError extends Error {
 }
 
 export async function loadManifest(): Promise<StoreManifest> {
-  const res = await fetch("/store.json", { cache: "no-store" });
+  let res = await fetch("/store.json", { cache: "no-store" });
+  if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
+    res = await fetch("/demo/store.json", { cache: "no-store" });
+  }
   if (!res.ok) {
     throw new ManifestError(
-      "There is no out/store.json yet. Generate the assets first.",
+      "Neither a generated store.json nor the bundled demo could be loaded.",
       "goldie all",
     );
   }
@@ -171,19 +176,37 @@ export type SceneCopy = {
 export async function loadDesign(): Promise<SavedDesign> {
   try {
     const res = await fetch("/api/design", { cache: "no-store" });
-    if (!res.ok) return {};
+    if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
+      return loadLocalDesign();
+    }
     const parsed = await res.json();
     return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
   } catch {
-    return {}; // a static build has no API; the config's values stand
+    return loadLocalDesign();
   }
 }
 
 export async function saveDesign(design: SavedDesign): Promise<void> {
-  const res = await fetch("/api/design", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(design),
-  });
-  if (!res.ok) throw new Error(`Saving goldie.design.json failed: ${await res.text()}`);
+  try {
+    const res = await fetch("/api/design", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(design),
+    });
+    if (res.ok) return;
+  } catch {
+    // The standalone Studio has no API; persist the demo choices locally.
+  }
+  localStorage.setItem(LOCAL_DESIGN_KEY, JSON.stringify(design));
+}
+
+const LOCAL_DESIGN_KEY = "goldie-studio:standalone-design";
+
+function loadLocalDesign(): SavedDesign {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_DESIGN_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
+  } catch {
+    return {};
+  }
 }

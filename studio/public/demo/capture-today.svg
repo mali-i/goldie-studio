@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 557 1210">
+  <rect width="557" height="1210" fill="#fbfaf7"/>
+  <text x="42" y="112" font-family="system-ui" font-size="25" fill="#8b7e65">Wednesday, September 12</text>
+  <text x="42" y="166" font-family="system-ui" font-size="47" font-weight="700" fill="#26231d">Good morning</text>
+  <rect x="32" y="218" width="493" height="178" rx="32" fill="#f4c95d"/>
+  <text x="62" y="270" font-family="system-ui" font-size="21" font-weight="650" fill="#584616">YOUR FOCUS</text>
+  <text x="62" y="322" font-family="system-ui" font-size="32" font-weight="700" fill="#2e2719">Design the next chapter</text>
+  <text x="62" y="357" font-family="system-ui" font-size="20" fill="#67572d">45 minutes · Start when ready</text>
+  <text x="38" y="458" font-family="system-ui" font-size="25" font-weight="700" fill="#2b2925">Today</text>
+  <g font-family="system-ui" font-size="23" fill="#302e29">
+    <rect x="32" y="486" width="493" height="112" rx="25" fill="#fff" stroke="#e8e3d9"/><circle cx="70" cy="542" r="17" fill="none" stroke="#d5a92f" stroke-width="4"/><text x="106" y="550">Shape the launch story</text>
+    <rect x="32" y="616" width="493" height="112" rx="25" fill="#fff" stroke="#e8e3d9"/><circle cx="70" cy="672" r="17" fill="#71b89b"/><path d="m61 672 7 7 13-17" fill="none" stroke="white" stroke-width="4"/><text x="106" y="680">Review customer notes</text>
+    <rect x="32" y="746" width="493" height="112" rx="25" fill="#fff" stroke="#e8e3d9"/><circle cx="70" cy="802" r="17" fill="none" stroke="#d5a92f" stroke-width="4"/><text x="106" y="810">Walk outside for 20 min</text>
+  </g>
+  <rect x="0" y="1118" width="557" height="92" fill="#fff"/><g fill="#9c9589"><circle cx="92" cy="1158" r="12"/><circle cx="278" cy="1158" r="12" fill="#c99d25"/><circle cx="465" cy="1158" r="12"/></g>
+</svg>
