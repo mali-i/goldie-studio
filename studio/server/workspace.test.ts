@@ -15,7 +15,12 @@ describe("workspace projects", () => {
     roots.push(root);
     const alpha = await workspaceService.createProject(root, "Alpha");
     const beta = await workspaceService.createProject(root, "Beta");
+    const duplicate = await workspaceService.createProject(root, "Alpha");
     const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    expect(alpha.project.id).toBe("Alpha");
+    expect(beta.project.id).toBe("Beta");
+    expect(duplicate.project.id).toBe("Alpha-2");
 
     await workspaceService.saveScreenshot(root, alpha.project.id, {
       device: "iphone-6.9",
@@ -46,7 +51,7 @@ describe("workspace projects", () => {
       "utf8",
     );
     expect(betaConfig).toContain("#123456");
-    expect(await workspaceService.listProjects(root)).toHaveLength(2);
+    expect(await workspaceService.listProjects(root)).toHaveLength(3);
 
     await workspaceService.applyDesign(root, alpha.project.id, {
       sceneLayouts: { home: "hero" },
@@ -125,5 +130,35 @@ describe("workspace projects", () => {
     expect(await readFile(join(root, project.project.id, "goldie.config.ts"), "utf8")).toContain(
       "Legacy Path",
     );
+  });
+
+  test("replaces generated project folders with the user's project name", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "我的 App");
+    const oldId = "prj_123456789abc";
+    const oldDir = join(root, oldId);
+    await rename(join(root, project.project.id), oldDir);
+    await writeFile(
+      join(oldDir, "project.json"),
+      `${JSON.stringify({ ...project.project, id: oldId }, null, 2)}\n`,
+    );
+
+    await workspaceService.migrateLegacyProjects(root);
+
+    const migrated = await workspaceService.readProject(root, "我的 App");
+    expect(migrated.project.id).toBe("我的 App");
+    expect(migrated.project.legacyIds).toContain(oldId);
+    expect(await workspaceService.resolveProjectId(root, oldId)).toBe("我的 App");
+    expect(await workspaceService.listProjects(root)).toHaveLength(1);
+  });
+
+  test("makes unsafe and reserved project names portable", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    expect((await workspaceService.createProject(root, "Client/App:*")).project.id).toBe(
+      "Client-App-",
+    );
+    expect((await workspaceService.createProject(root, "CON")).project.id).toBe("CON-project");
   });
 });

@@ -25,7 +25,7 @@ import {
 
 const CONFIG_START = "/* goldie-config:start */";
 const CONFIG_END = "/* goldie-config:end */";
-const PROJECT_ID = /^prj_[a-z0-9]{12}$/;
+const LEGACY_PROJECT_ID = /^prj_[a-z0-9]{12}$/;
 const SCENE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const MAX_BODY_BYTES = 35 * 1024 * 1024;
@@ -61,7 +61,8 @@ function createHandler(root: string) {
         return methodNotAllowed(res);
       }
 
-      const id = checkedProjectId(parts[2]);
+      const requestedId = checkedProjectId(decodeURIComponent(parts[2] ?? ""));
+      const id = await resolveProjectId(root, requestedId);
       if (parts.length === 3) {
         if (req.method === "GET") return sendJson(res, await readProject(root, id));
         return methodNotAllowed(res);
@@ -157,24 +158,90 @@ async function migrateLegacyProjects(root: string): Promise<void> {
   const legacyRoot = join(root, "projects");
   const entries = await readdir(legacyRoot, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
-    if (!entry.isDirectory() || !PROJECT_ID.test(entry.name)) continue;
+    if (!entry.isDirectory() || !isSafeProjectId(entry.name)) continue;
     const destination = join(root, entry.name);
     if (await stat(destination).catch(() => null)) continue;
     await rename(join(legacyRoot, entry.name), destination);
   }
   await rmdir(legacyRoot).catch(() => {});
+
+  const flatEntries = await readdir(root, { withFileTypes: true });
+  for (const entry of flatEntries) {
+    if (!entry.isDirectory() || !LEGACY_PROJECT_ID.test(entry.name)) continue;
+    const oldId = entry.name;
+    const oldMetaPath = join(root, oldId, "project.json");
+    const meta = JSON.parse(await readFile(oldMetaPath, "utf8")) as ProjectSummary;
+    const id = await availableProjectId(root, meta.name);
+    const destination = join(root, id);
+    await rename(join(root, oldId), destination);
+    await atomicJson(join(destination, "project.json"), {
+      ...meta,
+      id,
+      legacyIds: [...new Set([...(meta.legacyIds ?? []), meta.id, oldId])],
+    } satisfies ProjectSummary);
+  }
 }
 
 function checkedProjectId(id: string | undefined): string {
-  if (!id || !PROJECT_ID.test(id)) throw new HttpError(400, "Invalid project id.");
+  if (!id || !isSafeProjectId(id)) throw new HttpError(400, "Invalid project id.");
   return id;
+}
+
+function isSafeProjectId(id: string): boolean {
+  return (
+    id.length <= 80 &&
+    id.trim() === id &&
+    id !== "." &&
+    id !== ".." &&
+    id !== "demo" &&
+    id !== "projects" &&
+    !/[\\/\u0000-\u001f\u007f]/.test(id)
+  );
+}
+
+function projectIdFromName(name: string): string {
+  const cleaned = Array.from(
+    name
+      .normalize("NFC")
+      .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]+/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\.+|\.+$/g, "")
+      .trim(),
+  )
+    .slice(0, 80)
+    .join("");
+  if (
+    !cleaned ||
+    cleaned === "demo" ||
+    cleaned === "projects" ||
+    /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(cleaned)
+  ) {
+    return `${cleaned || "Untitled App"}-project`;
+  }
+  return cleaned;
+}
+
+async function availableProjectId(root: string, name: string): Promise<string> {
+  const base = projectIdFromName(name);
+  let id = base;
+  for (let suffix = 2; await stat(join(root, id)).catch(() => null); suffix += 1) {
+    id = `${base}-${suffix}`;
+  }
+  return id;
+}
+
+async function resolveProjectId(root: string, id: string): Promise<string> {
+  if (await stat(join(root, id)).catch(() => null)) return id;
+  const alias = (await listProjects(root)).find((project) => project.legacyIds?.includes(id));
+  return alias?.id ?? id;
 }
 
 async function listProjects(root: string): Promise<ProjectSummary[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const projects = await Promise.all(
     entries
-      .filter((entry) => entry.isDirectory() && PROJECT_ID.test(entry.name))
+      .filter((entry) => entry.isDirectory() && isSafeProjectId(entry.name))
       .map((entry) => readMeta(root, entry.name).catch(() => null)),
   );
   return projects
@@ -183,8 +250,8 @@ async function listProjects(root: string): Promise<ProjectSummary[]> {
 }
 
 async function createProject(root: string, rawName: string): Promise<ProjectDetail> {
-  const name = rawName.trim().slice(0, 80) || "Untitled App";
-  const id = `prj_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const name = Array.from(rawName.trim()).slice(0, 80).join("") || "Untitled App";
+  const id = await availableProjectId(root, name);
   const now = new Date().toISOString();
   const meta: ProjectSummary = { id, name, createdAt: now, updatedAt: now };
   await mkdir(join(projectDir(root, id), "screenshots"), { recursive: true });
@@ -404,7 +471,7 @@ async function projectManifest(root: string, id: string) {
         screenshots: config.scenes.flatMap((scene) => {
           const source = scene.sources[device]?.[locale];
           return source
-            ? [{ sceneId: scene.id, url: `api/projects/${id}/assets/${source.split("/").map(encodeURIComponent).join("/")}` }]
+            ? [{ sceneId: scene.id, url: `api/projects/${encodeURIComponent(id)}/assets/${source.split("/").map(encodeURIComponent).join("/")}` }]
             : [];
         }),
         clips: null,
@@ -586,4 +653,5 @@ export const workspaceService = {
   projectDesign,
   projectManifest,
   migrateLegacyProjects,
+  resolveProjectId,
 };

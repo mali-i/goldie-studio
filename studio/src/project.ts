@@ -13,6 +13,8 @@ export type ProjectSummary = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  /** Previous generated ids kept so old browser URLs can be redirected. */
+  legacyIds?: string[];
 };
 
 export type ProjectScene = {

@@ -54,7 +54,15 @@ export function App() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    projectApi.list().then(setProjects).catch(() => setProjects([]));
+    projectApi.list().then((items) => {
+      setProjects(items);
+      if (projectId === "demo" || items.some((project) => project.id === projectId)) return;
+      const migrated = items.find((project) => project.legacyIds?.includes(projectId));
+      if (!migrated) return;
+      window.history.replaceState({}, "", `/projects/${encodeURIComponent(migrated.id)}`);
+      localStorage.setItem("goldie-studio:last-project", migrated.id);
+      setProjectId(migrated.id);
+    }).catch(() => setProjects([]));
     const pop = () => setProjectId(projectIdFromLocation() ?? "demo");
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
