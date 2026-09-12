@@ -18,3 +18,9 @@ Each project lives under `workspace/<project-name>/` with its own managed
 Git. Unsafe path characters in a project name are replaced with `-`, and a
 numeric suffix distinguishes duplicate names. Set `GOLDIE_STUDIO_WORKSPACE`
 to store projects somewhere else.
+
+## Upstream
+
+This project is forked from
+[kacperkapusciak/goldie](https://github.com/kacperkapusciak/goldie) and has
+been refactored into a standalone, upload-first Studio.
