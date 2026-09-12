@@ -18,6 +18,8 @@ import {
   type ProjectDetail,
   type ProjectSummary,
   type UploadScreenshotInput,
+  WORKSPACE_FRAME_VARIANTS,
+  type WorkspaceFrameVariant,
 } from "../src/project";
 
 const CONFIG_START = "/* goldie-config:start */";
@@ -228,6 +230,9 @@ function validateConfig(config: GoldieProjectConfig): void {
   if (!config.theme || typeof config.theme.background !== "string") {
     throw new HttpError(422, "theme.background is required.");
   }
+  if (!isWorkspaceFrameVariant(config.frame?.variant)) {
+    throw new HttpError(422, "Unsupported frame variant.");
+  }
   const ids = new Set<string>();
   for (const scene of config.scenes ?? []) {
     if (!SCENE_ID.test(scene.id) || ids.has(scene.id)) throw new HttpError(422, `Invalid or duplicate scene id: ${scene.id}`);
@@ -310,7 +315,7 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
   const config = await readConfig(root, id);
   if (typeof design.background === "string") config.theme.background = design.background;
   if (typeof design.fontFamily === "string") config.theme.fontFamily = design.fontFamily;
-  if (typeof design.frame === "string" && design.frame) config.frame.variant = design.frame;
+  if (isWorkspaceFrameVariant(design.frame)) config.frame.variant = design.frame;
   if (typeof design.template === "string") config.theme.template = design.template || undefined;
   if (typeof design.layout === "string") config.theme.layout = design.layout;
   if (typeof design.screenOnly === "boolean") config.theme.screenOnly = design.screenOnly;
@@ -380,8 +385,9 @@ async function projectManifest(root: string, id: string) {
     design: {
       theme: config.theme,
       frameVariant: config.frame.variant,
-      frameVariants: ["17-pro-silver", "17-pro-blue", "17-pro-orange"],
+      frameVariants: [...WORKSPACE_FRAME_VARIANTS],
       frameAssets: {
+        "17-pro-classic": "frames/frame.svg",
         "17-pro-silver": "frames/17-pro-silver.svg",
         "17-pro-blue": "frames/17-pro-blue.svg",
         "17-pro-orange": "frames/17-pro-orange.svg",
@@ -473,6 +479,13 @@ function checkedTarget(value: unknown, label: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isWorkspaceFrameVariant(value: unknown): value is WorkspaceFrameVariant {
+  return (
+    typeof value === "string" &&
+    (WORKSPACE_FRAME_VARIANTS as readonly string[]).includes(value)
+  );
 }
 
 function imageFormat(bytes: Buffer): { ext: "png" | "jpg" | "webp"; mime: string } | null {

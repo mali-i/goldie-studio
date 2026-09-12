@@ -1,6 +1,13 @@
 import type { Decoration, Theme } from "./manifest";
 
 export const PROJECT_SCHEMA_VERSION = 1 as const;
+export const WORKSPACE_FRAME_VARIANTS = [
+  "17-pro-classic",
+  "17-pro-silver",
+  "17-pro-blue",
+  "17-pro-orange",
+] as const;
+export type WorkspaceFrameVariant = (typeof WORKSPACE_FRAME_VARIANTS)[number];
 
 export type ProjectSummary = {
   id: string;
@@ -39,7 +46,7 @@ export type GoldieProjectConfig = {
   store: ProjectStoreListing;
   devices: string[];
   locales: string[];
-  frame: { variant: string };
+  frame: { variant: WorkspaceFrameVariant };
   theme: Theme & {
     template?: string | string[];
     layout?: string;

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 606 1252">
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#6d6659"/><stop offset=".45" stop-color="#191816"/><stop offset="1" stop-color="#8b806e"/>
+    </linearGradient>
+    <mask id="cutout">
+      <rect width="606" height="1252" rx="108" fill="white"/>
+      <rect x="24" y="21" width="557" height="1210" rx="82" fill="black"/>
+    </mask>
+  </defs>
+  <rect width="606" height="1252" rx="108" fill="url(#metal)" mask="url(#cutout)"/>
+  <rect x="220" y="38" width="166" height="46" rx="23" fill="#050505"/>
+  <circle cx="363" cy="61" r="7" fill="#20283b"/>
+</svg>
