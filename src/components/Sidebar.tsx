@@ -1,5 +1,6 @@
 import {
   type LucideIcon,
+  LaptopIcon,
   MoonIcon,
   PlayIcon,
   PlusIcon,
@@ -29,8 +30,8 @@ import { ProjectSettings } from "./ProjectSettings";
 
 /**
  * The device-type rows, in display order. An entry without a platform renders
- * disabled: iPad stays that way until goldie can capture iPads, which then
- * needs a platform of its own here and in the app's view state.
+ * disabled: iPad and Mac stay that way until goldie can capture them, which
+ * then need platforms of their own here and in the app's view state.
  */
 const DEVICE_TYPES: Array<{
   key: string;
@@ -41,6 +42,7 @@ const DEVICE_TYPES: Array<{
   { key: "iphone", icon: SmartphoneIcon, label: "iPhone", platform: "ios" },
   { key: "ipad", icon: TabletIcon, label: "iPad" },
   { key: "android", icon: PlayIcon, label: "Android", platform: "android" },
+  { key: "mac", icon: LaptopIcon, label: "Mac" },
 ];
 
 /**
@@ -148,7 +150,7 @@ export function Sidebar({
             if (picked) onPlatform(picked);
           }}
           aria-label="Device type"
-          className="grid grid-cols-3 gap-2 px-5 pt-4"
+          className="grid grid-cols-4 gap-2 px-5 pt-4"
         >
           {DEVICE_TYPES.map(({ key, icon: Icon, label, platform: target }) => (
             <RadioGroupPrimitive.Item
