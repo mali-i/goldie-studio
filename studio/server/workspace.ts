@@ -4,6 +4,7 @@ import {
   readFile,
   readdir,
   rename,
+  rmdir,
   rm,
   stat,
   writeFile,
@@ -49,7 +50,7 @@ function createHandler(root: string) {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/projects")) return next();
     try {
-      await mkdir(projectsDir(root), { recursive: true });
+      await prepareWorkspace(root);
       const parts = url.pathname.split("/").filter(Boolean);
       if (parts.length === 2) {
         if (req.method === "GET") return sendJson(res, await listProjects(root));
@@ -132,10 +133,37 @@ class HttpError extends Error {
   }
 }
 
-const projectsDir = (root: string) => join(root, "projects");
-const projectDir = (root: string, id: string) => join(projectsDir(root), checkedProjectId(id));
+const projectDir = (root: string, id: string) => join(root, checkedProjectId(id));
 const metaFile = (root: string, id: string) => join(projectDir(root, id), "project.json");
 const configFile = (root: string, id: string) => join(projectDir(root, id), "goldie.config.ts");
+
+const workspacePreparations = new Map<string, Promise<void>>();
+
+/** Move projects created before the flat workspace layout into workspace/<id>. */
+function prepareWorkspace(root: string): Promise<void> {
+  const key = resolve(root);
+  const existing = workspacePreparations.get(key);
+  if (existing) return existing;
+  const preparation = migrateLegacyProjects(key).catch((error) => {
+    workspacePreparations.delete(key);
+    throw error;
+  });
+  workspacePreparations.set(key, preparation);
+  return preparation;
+}
+
+async function migrateLegacyProjects(root: string): Promise<void> {
+  await mkdir(root, { recursive: true });
+  const legacyRoot = join(root, "projects");
+  const entries = await readdir(legacyRoot, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !PROJECT_ID.test(entry.name)) continue;
+    const destination = join(root, entry.name);
+    if (await stat(destination).catch(() => null)) continue;
+    await rename(join(legacyRoot, entry.name), destination);
+  }
+  await rmdir(legacyRoot).catch(() => {});
+}
 
 function checkedProjectId(id: string | undefined): string {
   if (!id || !PROJECT_ID.test(id)) throw new HttpError(400, "Invalid project id.");
@@ -143,7 +171,7 @@ function checkedProjectId(id: string | undefined): string {
 }
 
 async function listProjects(root: string): Promise<ProjectSummary[]> {
-  const entries = await readdir(projectsDir(root), { withFileTypes: true });
+  const entries = await readdir(root, { withFileTypes: true });
   const projects = await Promise.all(
     entries
       .filter((entry) => entry.isDirectory() && PROJECT_ID.test(entry.name))
@@ -557,4 +585,5 @@ export const workspaceService = {
   applyDesign,
   projectDesign,
   projectManifest,
+  migrateLegacyProjects,
 };

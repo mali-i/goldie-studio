@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspaceService } from "./workspace";
@@ -42,7 +42,7 @@ describe("workspace projects", () => {
     expect(betaManifest.design.captures["iphone-6.9"]?.screenshots).toHaveLength(0);
 
     const betaConfig = await readFile(
-      join(root, "projects", beta.project.id, "goldie.config.ts"),
+      join(root, beta.project.id, "goldie.config.ts"),
       "utf8",
     );
     expect(betaConfig).toContain("#123456");
@@ -96,7 +96,7 @@ describe("workspace projects", () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);
     const project = await workspaceService.createProject(root, "Legacy Frame");
-    const path = join(root, "projects", project.project.id, "goldie.config.ts");
+    const path = join(root, project.project.id, "goldie.config.ts");
     const legacy = (await readFile(path, "utf8")).replace(
       '"variant": "17-pro-blue"',
       '"variant": "17-pro-classic"',
@@ -107,5 +107,23 @@ describe("workspace projects", () => {
       "17-pro-blue",
     );
     expect(await readFile(path, "utf8")).not.toContain("17-pro-classic");
+  });
+
+  test("migrates projects from workspace/projects into the flat layout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Legacy Path");
+    const legacyRoot = join(root, "projects");
+    await mkdir(legacyRoot);
+    await rename(join(root, project.project.id), join(legacyRoot, project.project.id));
+
+    await workspaceService.migrateLegacyProjects(root);
+
+    expect((await workspaceService.readProject(root, project.project.id)).project.name).toBe(
+      "Legacy Path",
+    );
+    expect(await readFile(join(root, project.project.id, "goldie.config.ts"), "utf8")).toContain(
+      "Legacy Path",
+    );
   });
 });
