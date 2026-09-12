@@ -68,6 +68,7 @@ export function ProjectSettings({
             options={[
               ["iphone-6.9", "iPhone 6.9\""],
               ["pixel-10-pro", "Pixel 10 Pro"],
+              ["mac-2880x1800", "Mac 2880 × 1800"],
             ]}
           />
         </Field>

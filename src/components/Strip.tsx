@@ -178,8 +178,8 @@ export function Strip({
 
   const totalSeconds = segments.reduce((s, c) => s + c.durationSeconds, 0);
 
-  // A device with its own bezel art (android) ignores the frame picker: the
-  // picker's variants are iPhone art, with iPhone geometry.
+  // A device with its own geometry (Android or Mac) ignores the frame picker:
+  // the picker's variants are iPhone art, with iPhone geometry.
   const deviceFrameUrl = tileSpec.frame?.url ?? frameUrl;
   const geom = tileSpec.frame?.geom;
 

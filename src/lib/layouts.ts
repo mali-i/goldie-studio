@@ -306,8 +306,10 @@ export function compose(
   opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
 ): Composition {
   const geom = opts.geom ?? FRAME;
+  // Keep wider portrait store sizes aligned to the iPhone reference, but let
+  // landscape targets such as Mac use their full canvas width.
   const tile =
-    tileIn.width / tileIn.height > REF_TILE_ASPECT + 1e-6
+    tileIn.width <= tileIn.height && tileIn.width / tileIn.height > REF_TILE_ASPECT + 1e-6
       ? { width: tileIn.height * REF_TILE_ASPECT, height: tileIn.height }
       : tileIn;
   const dx = (spec.span * (tileIn.width - tile.width)) / 2;

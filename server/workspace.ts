@@ -530,6 +530,27 @@ function deviceSpec(key: string) {
       frame: null,
     };
   }
+  if (key === "mac-2880x1800") {
+    return {
+      key,
+      label: "Mac 2880 × 1800",
+      platform: "macos",
+      simulatorName: null,
+      screenshot: { width: 2880, height: 1800 },
+      preview: null,
+      // An empty frame URL keeps the iPhone bezel out while still supplying
+      // full-screen geometry to the shared composition pipeline.
+      frame: {
+        url: "",
+        geom: {
+          width: 2880,
+          height: 1800,
+          screen: { x: 0, y: 0, width: 2880, height: 1800 },
+          screenRadius: 0,
+        },
+      },
+    };
+  }
   return {
     key,
     label: key === "iphone-6.9" ? "iPhone 6.9" : key,

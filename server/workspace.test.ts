@@ -97,6 +97,38 @@ describe("workspace projects", () => {
     ).rejects.toThrow("Only valid PNG, JPEG and WebP");
   });
 
+  test("publishes the Mac canvas specification through the shared manifest flow", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Mac App");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "mac-2880x1800",
+      locale: "en-US",
+      sceneId: "desktop",
+      mimeType: "image/png",
+      base64: png,
+    });
+
+    const manifest = (await workspaceService.projectManifest(root, project.project.id)) as {
+      devices: Array<{
+        key: string;
+        platform: string;
+        screenshot: { width: number; height: number };
+        frame: { url: string; geom: { screen: { width: number; height: number } } } | null;
+      }>;
+      design: { captures: Record<string, { screenshots: unknown[] }> };
+    };
+    const mac = manifest.devices.find((device) => device.key === "mac-2880x1800");
+
+    expect(mac?.platform).toBe("macos");
+    expect(mac?.screenshot).toEqual({ width: 2880, height: 1800 });
+    expect(mac?.frame?.url).toBe("");
+    expect(mac?.frame?.geom.screen).toEqual({ x: 0, y: 0, width: 2880, height: 1800 });
+    expect(manifest.design.captures["mac-2880x1800"]?.screenshots).toHaveLength(1);
+  });
+
   test("migrates the removed classic SVG frame to a real PNG variant", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);

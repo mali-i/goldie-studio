@@ -30,8 +30,8 @@ import { ProjectSettings } from "./ProjectSettings";
 
 /**
  * The device-type rows, in display order. An entry without a platform renders
- * disabled: iPad and Mac stay that way until goldie can capture them, which
- * then need platforms of their own here and in the app's view state.
+ * disabled: iPad stays that way until goldie can capture it, which then needs
+ * a platform of its own here and in the app's view state.
  */
 const DEVICE_TYPES: Array<{
   key: string;
@@ -42,7 +42,7 @@ const DEVICE_TYPES: Array<{
   { key: "iphone", icon: SmartphoneIcon, label: "iPhone", platform: "ios" },
   { key: "ipad", icon: TabletIcon, label: "iPad" },
   { key: "android", icon: PlayIcon, label: "Android", platform: "android" },
-  { key: "mac", icon: LaptopIcon, label: "Mac" },
+  { key: "mac", icon: LaptopIcon, label: "Mac", platform: "macos" },
 ];
 
 /**
@@ -141,10 +141,10 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">
-        {/* Both stores always show, so an iOS-only setup still surfaces that
-            Google Play screenshots exist (and vice versa). */}
+        {/* Every device family stays visible even when the current project has
+            not configured an upload target for it yet. */}
         <RadioGroupPrimitive.Root
-          value={platform === "ios" ? "iphone" : "android"}
+          value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
           onValueChange={(key) => {
             const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
             if (picked) onPlatform(picked);

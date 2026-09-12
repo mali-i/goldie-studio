@@ -1,4 +1,10 @@
-import { CameraIcon, type LucideIcon, SmartphoneIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  CameraIcon,
+  LaptopIcon,
+  type LucideIcon,
+  SmartphoneIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { Sidebar } from "./components/Sidebar";
@@ -21,7 +27,7 @@ import {
 /** Sentinel for the config's own layout sequence, which the studio can show but not edit. */
 export const CUSTOM_TEMPLATE = "__custom__";
 
-export type Platform = "ios" | "android";
+export type Platform = "ios" | "android" | "macos";
 
 /** Shown when a store tab has no configured upload target. */
 const ENABLE_PLATFORM: Record<
@@ -37,6 +43,11 @@ const ENABLE_PLATFORM: Record<
     icon: SmartphoneIcon,
     title: "No Google Play screenshots yet",
     body: "Choose an Android device in Project settings, then upload screenshots.",
+  },
+  macos: {
+    icon: LaptopIcon,
+    title: "No Mac App Store screenshots yet",
+    body: "Choose a Mac in Project settings, then upload screenshots.",
   },
 };
 
@@ -159,11 +170,11 @@ function Loaded({
 }) {
   const design = manifest.design;
   const view = loadView(manifest.app.name);
-  // Both store tabs render even when only one platform is configured, so the
+  // All device-family tabs render even when only one platform is configured, so the
   // platform is view state of its own: an unconfigured tab has no device key
   // to derive it from.
   const initialPlatform: Platform =
-    view.platform === "ios" || view.platform === "android"
+    view.platform === "ios" || view.platform === "android" || view.platform === "macos"
       ? view.platform
       : (manifest.devices.find((d) => d.key === view.device)?.platform ??
         manifest.devices[0]?.platform ??
@@ -180,6 +191,14 @@ function Loaded({
     const devices = manifest.devices.filter((d) => d.platform === p);
     if (devices.length > 0 && !devices.some((d) => d.key === device)) setDevice(devices[0]!.key);
   };
+  // Project settings can replace the configured device while this component
+  // remains mounted. Keep uploads and exports pointed at the newly loaded key.
+  useEffect(() => {
+    const devices = manifest.devices.filter((entry) => entry.platform === platform);
+    if (devices.length > 0 && !devices.some((entry) => entry.key === device)) {
+      setDevice(devices[0]!.key);
+    }
+  }, [device, manifest.devices, platform]);
   const [locale, setLocale] = useState(
     view.locale && manifest.locales.includes(view.locale)
       ? view.locale
