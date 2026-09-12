@@ -206,9 +206,18 @@ async function readConfig(root: string, id: string): Promise<GoldieProjectConfig
   const start = source.indexOf(CONFIG_START);
   const end = source.indexOf(CONFIG_END);
   if (start === -1 || end <= start) throw new HttpError(422, "The project config is not Studio-managed.");
-  const config = JSON.parse(source.slice(start + CONFIG_START.length, end)) as GoldieProjectConfig;
-  validateConfig(config);
-  return config;
+  const config = JSON.parse(source.slice(start + CONFIG_START.length, end)) as Omit<
+    GoldieProjectConfig,
+    "frame"
+  > & { frame?: { variant?: string } };
+  // `17-pro-classic` briefly existed as a generated SVG option. Migrate
+  // projects created during that version to the real bundled blue PNG.
+  if (config.frame?.variant === "17-pro-classic") {
+    config.frame.variant = "17-pro-blue";
+    await atomicWrite(configFile(root, id), serializeConfig(config as GoldieProjectConfig));
+  }
+  validateConfig(config as GoldieProjectConfig);
+  return config as GoldieProjectConfig;
 }
 
 async function writeConfig(root: string, id: string, config: GoldieProjectConfig): Promise<void> {

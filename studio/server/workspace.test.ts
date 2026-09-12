@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspaceService } from "./workspace";
@@ -90,5 +90,22 @@ describe("workspace projects", () => {
         device: "iphone-6.9",
       }),
     ).rejects.toThrow("Only valid PNG, JPEG and WebP");
+  });
+
+  test("migrates the removed classic SVG frame to a real PNG variant", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Legacy Frame");
+    const path = join(root, "projects", project.project.id, "goldie.config.ts");
+    const legacy = (await readFile(path, "utf8")).replace(
+      '"variant": "17-pro-blue"',
+      '"variant": "17-pro-classic"',
+    );
+    await writeFile(path, legacy);
+
+    expect((await workspaceService.readProject(root, project.project.id)).config.frame.variant).toBe(
+      "17-pro-blue",
+    );
+    expect(await readFile(path, "utf8")).not.toContain("17-pro-classic");
   });
 });
