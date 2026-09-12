@@ -3,10 +3,10 @@ import { compose, LANDSCAPE_LAYOUTS, LANDSCAPE_TYPE, LAYOUT_KEYS } from "./layou
 
 const MAC_TILE = { width: 2880, height: 1800 };
 const MAC_GEOMETRY = {
-  width: 2880,
-  height: 1800,
-  screen: { x: 0, y: 0, width: 2880, height: 1800 },
-  screenRadius: 0,
+  width: 3626,
+  height: 2720,
+  screen: { x: 453, y: 433, width: 2720, height: 1766 },
+  screenRadius: 24,
 };
 const THEME = { copyHeightRatio: 0.24, deviceWidthRatio: 0.84 };
 
@@ -27,7 +27,7 @@ describe("Mac landscape layouts", () => {
         expect(Number.isFinite(device.frame.top)).toBe(true);
         expect(device.frame.width).toBeGreaterThan(0);
         expect(device.frame.height).toBeGreaterThan(0);
-        expect(device.screen.width / device.screen.height).toBeCloseTo(16 / 10, 5);
+        expect(device.screen.width / device.screen.height).toBeCloseTo(2720 / 1766, 5);
       }
     }
   });
@@ -36,6 +36,9 @@ describe("Mac landscape layouts", () => {
     const mac = compose(LANDSCAPE_LAYOUTS.classic, MAC_TILE, THEME, { geom: MAC_GEOMETRY });
     expect(mac.type.headlineSize).toBe(0.048);
     expect(mac.type.subheadSize).toBe(0.022);
-    expect(mac.devices[0]?.frame.width).toBeLessThan(MAC_TILE.width * 0.77);
+    expect(mac.devices[0]?.frame.top).toBeGreaterThanOrEqual(mac.copy?.box.height ?? 0);
+    expect(
+      (mac.devices[0]?.frame.top ?? 0) + (mac.devices[0]?.frame.height ?? 0),
+    ).toBeLessThanOrEqual(MAC_TILE.height);
   });
 });

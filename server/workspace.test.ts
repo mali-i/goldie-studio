@@ -124,8 +124,8 @@ describe("workspace projects", () => {
 
     expect(mac?.platform).toBe("macos");
     expect(mac?.screenshot).toEqual({ width: 2880, height: 1800 });
-    expect(mac?.frame?.url).toBe("");
-    expect(mac?.frame?.geom.screen).toEqual({ x: 0, y: 0, width: 2880, height: 1800 });
+    expect(mac?.frame?.url).toBe("frames/macbook-air.png");
+    expect(mac?.frame?.geom.screen).toEqual({ x: 453, y: 433, width: 2720, height: 1766 });
     expect(manifest.design.captures["mac-2880x1800"]?.screenshots).toHaveLength(1);
   });
 

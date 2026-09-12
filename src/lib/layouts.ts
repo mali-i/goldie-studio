@@ -202,47 +202,47 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
   classic: {
     ...LAYOUTS.classic,
     copy: { position: "top", align: "center", heightRatio: 0.28, widthRatio: 0.76 },
-    devices: single({ widthRatio: 0.76, x: 0.5, y: 0.62, fitBelowCopy: true }),
+    devices: single({ widthRatio: 0.84, x: 0.5, y: 0.62, fitBelowCopy: true }),
   },
   "copy-below": {
     ...LAYOUTS["copy-below"],
     copy: { position: "bottom", align: "center", heightRatio: 0.27, widthRatio: 0.76 },
-    devices: single({ widthRatio: 0.76, x: 0.5, y: 0.26 }),
+    devices: single({ widthRatio: 0.6, x: 0.5, y: 0.365 }),
   },
   hero: {
     ...LAYOUTS.hero,
     copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.8 },
-    devices: single({ widthRatio: 0.86, x: 0.5, y: 0.72 }),
+    devices: single({ widthRatio: 0.98, x: 0.5, y: 0.74 }),
   },
   offset: {
     ...LAYOUTS.offset,
     copy: { position: "top", align: "left", heightRatio: 0.28, widthRatio: 0.52 },
-    devices: single({ widthRatio: 0.74, x: 0.63, y: 0.69 }),
+    devices: single({ widthRatio: 0.86, x: 0.63, y: 0.72 }),
   },
   tilt: {
     ...LAYOUTS.tilt,
     copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
-    devices: single({ widthRatio: 0.8, x: 0.5, y: 0.72, rotate: -3 }),
+    devices: single({ widthRatio: 0.92, x: 0.5, y: 0.72, rotate: -3 }),
   },
   "tilt-right": {
     ...LAYOUTS["tilt-right"],
     copy: { position: "top", align: "left", heightRatio: 0.28, widthRatio: 0.52 },
-    devices: single({ widthRatio: 0.74, x: 0.64, y: 0.7, rotate: 4 }),
+    devices: single({ widthRatio: 0.86, x: 0.64, y: 0.72, rotate: 4 }),
   },
   duo: {
     ...LAYOUTS.duo,
     copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
     devices: [
-      { widthRatio: 0.5, x: 0.32, y: 0.57, rotate: 0, capture: "secondary" },
-      { widthRatio: 0.56, x: 0.66, y: 0.7, rotate: 0, capture: "primary" },
+      { widthRatio: 0.58, x: 0.32, y: 0.57, rotate: 0, capture: "secondary" },
+      { widthRatio: 0.65, x: 0.66, y: 0.7, rotate: 0, capture: "primary" },
     ],
   },
   "duo-tilt": {
     ...LAYOUTS["duo-tilt"],
     copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
     devices: [
-      { widthRatio: 0.48, x: 0.31, y: 0.56, rotate: -4, capture: "secondary" },
-      { widthRatio: 0.54, x: 0.67, y: 0.71, rotate: 3, capture: "primary" },
+      { widthRatio: 0.56, x: 0.31, y: 0.56, rotate: -4, capture: "secondary" },
+      { widthRatio: 0.63, x: 0.67, y: 0.71, rotate: 3, capture: "primary" },
     ],
   },
   panorama: {
@@ -260,7 +260,7 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
   },
   minimal: {
     ...LAYOUTS.minimal,
-    devices: single({ widthRatio: 0.88, x: 0.5, y: 0.5 }),
+    devices: single({ widthRatio: 0.8, x: 0.5, y: 0.5 }),
   },
 };
 

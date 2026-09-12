@@ -7,3 +7,7 @@ by [Kelly Hu](https://www.figma.com/@kellyhu2), licensed under
 
 The bezel art was exported from that file and cropped to a transparent screen
 cutout.
+
+`macbook-air.png` is sourced from
+[Free MacBook Air M2 Frontview Mockup](https://www.figma.com/community/file/1210198565936992993/free-macbook-air-m2-frontview-mockup?q_id=1175958b-c39b-4ebb-b295-3fecf7c01a5d)
+on Figma Community.

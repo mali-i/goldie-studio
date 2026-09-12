@@ -538,15 +538,13 @@ function deviceSpec(key: string) {
       simulatorName: null,
       screenshot: { width: 2880, height: 1800 },
       preview: null,
-      // An empty frame URL keeps the iPhone bezel out while still supplying
-      // full-screen geometry to the shared composition pipeline.
       frame: {
-        url: "",
+        url: "frames/macbook-air.png",
         geom: {
-          width: 2880,
-          height: 1800,
-          screen: { x: 0, y: 0, width: 2880, height: 1800 },
-          screenRadius: 0,
+          width: 3626,
+          height: 2720,
+          screen: { x: 453, y: 433, width: 2720, height: 1766 },
+          screenRadius: 24,
         },
       },
     };
