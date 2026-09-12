@@ -1,83 +1,35 @@
 {
-  "name": "goldie",
-  "version": "0.3.1",
-  "description": "App Store screenshot and preview automation driven by argent",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kacperkapusciak/goldie.git"
-  },
-  "homepage": "https://github.com/kacperkapusciak/goldie#readme",
-  "keywords": [
-    "app-store",
-    "screenshots",
-    "app-preview",
-    "ios",
-    "simulator",
-    "argent",
-    "android",
-    "google-play",
-    "claude-skill"
-  ],
+  "name": "goldie-studio",
+  "private": true,
   "type": "module",
-  "bin": {
-    "goldie": "dist/cli.js"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist/",
-    "assets/17-pro-*.png",
-    "assets/pixel-10-pro.webp",
-    "assets/favicon.png",
-    "assets/ATTRIBUTION.md",
-    "assets/fonts/",
-    "studio/dist/",
-    "skills/",
-    "goldie.config.example.ts"
-  ],
-  "engines": {
-    "node": ">=20.12.0"
-  },
-  "os": [
-    "darwin",
-    "linux",
-    "win32"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
-    "goldie": "bun src/cli.ts",
-    "doctor": "bun src/cli.ts doctor",
-    "capture": "bun src/cli.ts capture",
-    "frame": "bun src/cli.ts frame",
-    "preview": "bun src/cli.ts preview",
-    "all": "bun src/cli.ts all",
-    "studio": "bun run build:studio && bun src/cli.ts studio",
-    "studio:build": "bun run build:studio",
-    "format": "biome format --write .",
-    "lint": "biome lint .",
-    "check": "biome check --write .",
-    "build": "bun run build:studio && bun run build:cli",
-    "build:cli": "rm -rf dist && bun build src/cli.ts src/index.ts --outdir dist --target node --packages external --sourcemap=linked && tsc -p tsconfig.build.json",
-    "build:studio": "cd studio && bun install --silent && bun run build",
-    "prepublishOnly": "bun run check && bun test && bun run build"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "bun test"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.8",
-    "@swmansion/argent": "^0.22.0",
-    "jiti": "^2.6.0"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "fflate": "^0.8.2",
+    "html-to-image": "^1.11.13",
+    "lucide-react": "^1.34.0",
+    "motion": "^13.1.1",
+    "radix-ui": "^1.6.7",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "shadcn": "^4.19.0",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
-    "@types/bun": "^1.4.0",
-    "typescript": "5.9.3"
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.9"
   }
 }

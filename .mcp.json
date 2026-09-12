@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "argent": {
-      "command": "npx",
-      "args": ["-y", "@swmansion/argent@0", "mcp"]
-    }
-  }
-}

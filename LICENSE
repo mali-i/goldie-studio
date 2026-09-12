@@ -22,12 +22,8 @@ SOFTWARE.
 
 ---
 
-The bundled device bezel images (assets/17-pro-*.png) are not covered by the
+The bundled device bezel images (public/frames/17-pro-*.png) are not covered by the
 MIT license above. They are derived from "iPhone 17 & 17 Pro Device Frames" by
 Kelly Hu (https://www.figma.com/community/file/1600584030566600974/iphone-17-17-pro-device-frames)
 and are licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
-See assets/ATTRIBUTION.md.
-
-The bundled fonts (assets/fonts/) are likewise not covered by the MIT license
-above. They are licensed under the SIL Open Font License 1.1; see
-assets/fonts/OFL.txt.
+See public/frames/ATTRIBUTION.md.

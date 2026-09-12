@@ -1048,7 +1048,7 @@ function rankOf(order: string[], id: string): number {
 }
 
 /**
- * Mirror of the CLI's backgroundLuminance: mean relative luminance of the
+ * Mean relative luminance of the
  * value's six-digit hex colors, or null when it has none.
  */
 function backgroundLuminance(css: string): number | null {

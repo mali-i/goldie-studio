@@ -12,7 +12,6 @@ import {
   type DeviceEntry,
   loadDesign,
   loadManifest,
-  ManifestError,
   type SavedDesign,
   type SceneCopy,
   type StoreManifest,
@@ -99,7 +98,6 @@ export function App() {
         icon={TriangleAlertIcon}
         title="The studio could not load"
         body={error.message}
-        command={error instanceof ManifestError ? error.command : undefined}
       />
     );
   if (!loaded) return null;

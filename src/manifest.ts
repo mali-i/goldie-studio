@@ -1,46 +1,102 @@
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  symlink,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import type { CaptureManifest } from "./capture.ts";
-import {
-  type Decoration,
-  deviceFrame,
-  FRAME_VARIANTS,
-  framePath,
-  isPreview,
-  isScreenshot,
-  type LoadedConfig,
-  type Theme,
-  variantFramePath,
-} from "./config.ts";
-import { execOrThrow } from "./exec.ts";
-import { FONTS, fontFilePath } from "./fonts.ts";
-import { imageSize } from "./image.ts";
-import { type FrameGeometry, LAYOUTS, TEMPLATES } from "./layouts.ts";
-import { DEVICES, type DeviceKey } from "./specs.ts";
+/** Data contract shared by the workspace API and the browser renderer. */
 
-/**
- * `out/web/` - the studio's static root. It holds the manifest, the
- * bezel art, and symlinks to the finished assets and the raw
- * captures. The raw captures and bezels are what the studio composites in
- * the browser (instant background/frame changes); the finished files under
- * screenshots/ and previews/ are what an export zips up.
- *
- * The `design` section carries everything the browser-side composition needs:
- * the theme, each scene's copy, and per-device raw capture urls. `assets`
- * still records the finished files so tooling can see what was last rendered.
- */
+export type Theme = {
+  background: string;
+  headlineColor: string;
+  subheadColor: string;
+  fontFamily: string;
+  /** Fraction of the frame height reserved for copy above the device. */
+  copyHeightRatio: number;
+  /** Fraction of the frame width the device bezel occupies. */
+  deviceWidthRatio: number;
+};
+
+/** An optional layer drawn behind the uploaded device screenshot. */
+export type Decoration =
+  | {
+      kind: "badge";
+      text: Record<string, string>;
+      position: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+      background?: string;
+      color?: string;
+    }
+  | { kind: "image"; src: string; x: number; y: number; width: number; rotate?: number };
+
+export type LayoutEntry = { key: string; label: string; description: string; span: number };
+export type TemplateEntry = { key: string; label: string; description: string; sequence: string[] };
+
+/** Mirrors FrameGeometry in src/layouts.ts: a bezel image's box and the screen cutout inside it. */
+export type FrameGeometry = {
+  width: number;
+  height: number;
+  screen: { x: number; y: number; width: number; height: number };
+  screenRadius: number;
+};
+
+export type DeviceEntry = {
+  key: string;
+  label: string;
+  platform: "ios" | "android";
+  simulatorName: string | null;
+  screenshot: { width: number; height: number };
+  preview: { width: number; height: number } | null;
+  /** Bezel art fixed to this device (android), null when the frame picker applies. */
+  frame: { url: string; geom: FrameGeometry } | null;
+};
+
+export type DesignScene = {
+  id: string;
+  headline: Record<string, string>;
+  subhead?: Record<string, string>;
+  layout?: string;
+  secondScene?: string;
+  decorations?: Decoration[];
+};
+
+export type BundledFont = {
+  key: string;
+  family: string;
+  fallback: string;
+  faces: Array<{ weight: number; url: string }>;
+};
+
+export type DeviceCaptures = {
+  screenshots: Array<{ sceneId: string; url: string }>;
+  clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
+};
+
+export type Design = {
+  theme: Theme;
+  /** null when the config points at custom bezel art. */
+  frameVariant: string | null;
+  frameVariants: string[];
+  /** Standalone Studio may map a frame key to any same-origin asset URL. */
+  frameAssets?: Record<string, string>;
+  customFrameUrl: string | null;
+  /** Bundled typefaces with the @font-face sources to declare. */
+  fonts: BundledFont[];
+  layouts: LayoutEntry[];
+  templates: TemplateEntry[];
+  /** The theme's template: a built-in key, null for none, or the config's custom sequence. */
+  template: string | string[] | null;
+  /** The theme's default layout key. */
+  layout: string;
+  screenOnly: boolean;
+  decorations: Decoration[];
+  scenes: DesignScene[];
+  preview: {
+    sceneId: string;
+    segments: Array<{ id: string }>;
+  } | null;
+  /** Screenshot source URLs per device key. */
+  captures: Record<string, DeviceCaptures>;
+  /** Upload projects can provide a different source image for each locale. */
+  capturesByLocale?: Record<string, Record<string, DeviceCaptures>>;
+};
+
 export type StoreManifest = {
+  /** True for the assets bundled with the standalone Studio. */
+  demo?: boolean;
   generatedAt: string;
   app: {
     name: string;
@@ -53,321 +109,122 @@ export type StoreManifest = {
     price: string;
     description: Record<string, string>;
   };
-  devices: Array<{
-    key: DeviceKey;
-    label: string;
-    platform: "ios" | "android";
-    simulatorName: string | null;
-    screenshot: { width: number; height: number };
-    preview: { width: number; height: number } | null;
-    /**
-     * Bezel art fixed to this device (the android Pixel art), with the
-     * geometry it composes at. null on devices that render the frame variant
-     * the design picks.
-     */
-    frame: { url: string; geom: FrameGeometry } | null;
-  }>;
+  devices: DeviceEntry[];
   locales: string[];
-  /** Keyed by device key, then locale. */
-  assets: Record<string, Record<string, LocaleAssets>>;
-  /** Everything the studio needs to composite scenes in the browser. */
-  design: {
-    theme: Theme;
-    /** null when the config points at custom bezel art. */
-    frameVariant: string | null;
-    frameVariants: string[];
-    /** Url of the config's custom bezel art; null when a bundled variant is used. */
-    customFrameUrl: string | null;
-    /** Bundled typefaces, with the @font-face sources the studio declares. */
-    fonts: Array<{
-      key: string;
-      family: string;
-      fallback: string;
-      faces: Array<{ weight: number; url: string }>;
-    }>;
-    /** Every layout the studio can pick, in menu order. */
-    layouts: Array<{ key: string; label: string; description: string; span: number }>;
-    templates: Array<{ key: string; label: string; description: string; sequence: string[] }>;
-    /** The theme's template: a built-in key, null for none, or the config's custom sequence. */
-    template: string | string[] | null;
-    /** The theme's default layout key. */
-    layout: string;
-    screenOnly: boolean;
-    /** Theme-level decorations; image `src` values are urls under out/web. */
-    decorations: Decoration[];
-    scenes: Array<{
-      id: string;
-      headline: Record<string, string>;
-      subhead?: Record<string, string>;
-      layout?: string;
-      secondScene?: string;
-      decorations?: Decoration[];
-    }>;
-    preview: {
-      sceneId: string;
-      segments: Array<{ id: string }>;
-    } | null;
-    /** Raw capture urls per device key; a device is absent until `goldie capture` ran. */
-    captures: Record<
-      string,
-      {
-        screenshots: Array<{ sceneId: string; url: string }>;
-        clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
-      }
-    >;
-  };
+  design: Design;
 };
 
-export type LocaleAssets = {
-  screenshots: Array<{
-    sceneId: string;
-    url: string;
-    width: number;
-    height: number;
-    bytes: number;
-  }>;
-  preview: {
-    sceneId: string;
-    url: string;
-    width: number;
-    height: number;
-    bytes: number;
-    durationSeconds: number;
-  } | null;
-};
-
-export const WEB_DIR = "web";
-
-export async function writeManifest(cfg: LoadedConfig): Promise<string> {
-  const webDir = join(cfg.outDir, WEB_DIR);
-  await mkdir(webDir, { recursive: true });
-  await link(join(cfg.outDir, "screenshots"), join(webDir, "screenshots"));
-  await link(join(cfg.outDir, "previews"), join(webDir, "previews"));
-  await link(join(cfg.outDir, "raw"), join(webDir, "raw"));
-
-  // Bezel art the browser composites with; every bundled variant so switching
-  // frames never waits on a server.
-  const framesDir = join(webDir, "frames");
-  await mkdir(framesDir, { recursive: true });
-  for (const variant of FRAME_VARIANTS) {
-    await copyFile(variantFramePath(variant), join(framesDir, `${variant}.png`));
-  }
-  const custom = "variant" in cfg.frame ? null : "frames/custom.png";
-  if (custom) await copyFile(framePath(cfg), join(webDir, custom));
-
-  // Bezel art a device brings itself, copied under its device key: the
-  // android Pixel art, which the frame picker does not apply to.
-  const deviceFrames: Record<string, { url: string; geom: FrameGeometry }> = {};
-  for (const key of cfg.devices) {
-    if (DEVICES[key].platform !== "android") continue;
-    const { image, geom } = deviceFrame(cfg, key);
-    const url = `frames/${key}${extname(image)}`;
-    await copyFile(image, join(webDir, url));
-    deviceFrames[key] = { url, geom };
-  }
-
-  // Bundled typefaces, so the browser renders the same cuts the canvas does.
-  const fontsDir = join(webDir, "fonts");
-  await mkdir(fontsDir, { recursive: true });
-  const fonts: StoreManifest["design"]["fonts"] = [];
-  for (const [key, font] of Object.entries(FONTS)) {
-    const faces: Array<{ weight: number; url: string }> = [];
-    for (const [weight, file] of Object.entries(font.files)) {
-      await copyFile(fontFilePath(file), join(fontsDir, file));
-      faces.push({ weight: Number(weight), url: `fonts/${file}` });
-    }
-    fonts.push({ key, family: font.family, fallback: font.fallback, faces });
-  }
-
-  // Decoration images, copied so the browser can draw the same layers.
-  const decorDir = join(webDir, "decor");
-  await mkdir(decorDir, { recursive: true });
-  const webDecorations = async (list: Decoration[] | undefined) =>
-    Promise.all(
-      (list ?? []).map(async (d) => {
-        if (d.kind !== "image") return d;
-        const name = basename(d.src);
-        await copyFile(resolve(cfg.root, d.src), join(decorDir, name));
-        return { ...d, src: `decor/${name}` };
-      }),
-    );
-  const scenes: StoreManifest["design"]["scenes"] = [];
-  for (const scene of cfg.scenes.filter(isScreenshot)) {
-    scenes.push({
-      id: scene.id,
-      headline: scene.headline,
-      ...(scene.subhead ? { subhead: scene.subhead } : {}),
-      ...(scene.layout ? { layout: scene.layout } : {}),
-      ...(scene.secondScene ? { secondScene: scene.secondScene } : {}),
-      ...(scene.decorations ? { decorations: await webDecorations(scene.decorations) } : {}),
+export async function loadManifest(projectId?: string): Promise<StoreManifest> {
+  if (projectId && projectId !== "demo") {
+    const project = await fetch(`/api/projects/${encodeURIComponent(projectId)}/manifest`, {
+      cache: "no-store",
     });
+    if (!project.ok) throw new Error((await project.text()) || `Loading project failed (${project.status}).`);
+    return cacheBust((await project.json()) as StoreManifest);
+  }
+  const res = await fetch("/demo/store.json", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error("The bundled demo could not be loaded.");
+  }
+  const manifest: StoreManifest = await res.json();
+  if (!manifest.design?.fonts || !manifest.design.layouts) {
+    throw new Error("The bundled demo manifest is invalid.");
   }
 
-  const assets: StoreManifest["assets"] = {};
-  for (const deviceKey of cfg.devices) {
-    assets[deviceKey] = {};
-    for (const locale of cfg.locales) {
-      assets[deviceKey][locale] = await collect(cfg, deviceKey, locale);
-    }
-  }
-
-  const captures: StoreManifest["design"]["captures"] = {};
-  for (const deviceKey of cfg.devices) {
-    const raw = await readCaptureManifest(cfg, deviceKey);
-    if (!raw) continue;
-    captures[deviceKey] = {
-      screenshots: raw.screenshots.map((s) => ({
-        sceneId: s.sceneId,
-        url: `raw/${deviceKey}/${basename(s.file)}`,
-      })),
-      clips: raw.preview
-        ? raw.preview.clips.map((c) => ({
-            segmentId: c.segmentId,
-            url: `raw/${deviceKey}/${basename(c.file)}`,
-            durationSeconds: c.durationSeconds,
-          }))
-        : null,
-    };
-  }
-
-  const previewScene = cfg.scenes.find(isPreview);
-  const manifest: StoreManifest = {
-    generatedAt: new Date().toISOString(),
-    app: { ...cfg.store },
-    devices: cfg.devices.map((key) => ({
-      key,
-      label: DEVICES[key].label,
-      platform: DEVICES[key].platform,
-      simulatorName: DEVICES[key].simulatorName ?? null,
-      screenshot: DEVICES[key].screenshot,
-      preview: DEVICES[key].preview,
-      frame: deviceFrames[key] ?? null,
-    })),
-    locales: cfg.locales,
-    assets,
-    design: {
-      theme: cfg.theme,
-      frameVariant: "variant" in cfg.frame ? cfg.frame.variant : null,
-      frameVariants: [...FRAME_VARIANTS],
-      customFrameUrl: custom,
-      fonts,
-      layouts: Object.values(LAYOUTS).map(({ key, label, description, span }) => ({
-        key,
-        label,
-        description,
-        span,
-      })),
-      templates: Object.values(TEMPLATES),
-      template: cfg.theme.template ?? null,
-      layout: cfg.theme.layout ?? "classic",
-      screenOnly: cfg.theme.screenOnly ?? false,
-      decorations: await webDecorations(cfg.theme.decorations),
-      scenes,
-      preview: previewScene
-        ? {
-            sceneId: previewScene.id,
-            segments: previewScene.segments.map(({ id }) => ({ id })),
-          }
-        : null,
-      captures,
-    },
-  };
-
-  const file = join(webDir, "store.json");
-  await writeFile(file, JSON.stringify(manifest, null, 2));
-  return file;
+  // Uploaded files keep stable names when replaced, so the manifest timestamp
+  // acts as a cache-buster and a reload shows the latest pixels.
+  return cacheBust(manifest);
 }
 
-async function readCaptureManifest(
-  cfg: LoadedConfig,
-  deviceKey: DeviceKey,
-): Promise<CaptureManifest | null> {
+function cacheBust(manifest: StoreManifest): StoreManifest {
+  const v = `?v=${Date.parse(manifest.generatedAt) || 0}`;
+  for (const captures of Object.values(manifest.design.captures)) {
+    for (const shot of captures.screenshots) shot.url += v;
+    for (const clip of captures.clips ?? []) clip.url += v;
+  }
+  for (const locales of Object.values(manifest.design.capturesByLocale ?? {})) {
+    for (const captures of Object.values(locales)) {
+      for (const shot of captures.screenshots) shot.url += v;
+      for (const clip of captures.clips ?? []) clip.url += v;
+    }
+  }
+  return manifest;
+}
+
+/** Design choices persisted into a project config, or localStorage for Demo. */
+export type SavedDesign = {
+  background?: string;
+  frame?: string;
+  fontFamily?: string;
+  /** Copy edited in the lightbox, per screenshot scene id, then locale. */
+  copy?: Record<string, SceneCopy>;
+  /** Screenshot scene ids in the order the tiles were dragged into. */
+  order?: string[];
+  /** A built-in template key, or "" for none. */
+  template?: string;
+  /** Default layout key for scenes the template does not cover. */
+  layout?: string;
+  screenOnly?: boolean;
+  /** Layout overrides per screenshot scene id. */
+  sceneLayouts?: Record<string, string>;
+};
+
+export type SceneCopy = {
+  headline?: Record<string, string>;
+  subhead?: Record<string, string>;
+};
+
+export async function loadDesign(projectId?: string): Promise<SavedDesign> {
+  if (projectId && projectId !== "demo") {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/design`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Could not load project design (${res.status}).`);
+    const parsed = await res.json();
+    return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
+  }
   try {
-    return JSON.parse(await readFile(join(cfg.outDir, "raw", deviceKey, "manifest.json"), "utf8"));
+    const res = await fetch("/api/design", { cache: "no-store" });
+    if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
+      return loadLocalDesign();
+    }
+    const parsed = await res.json();
+    return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
   } catch {
-    return null;
+    return loadLocalDesign();
   }
 }
 
-async function collect(
-  cfg: LoadedConfig,
-  deviceKey: DeviceKey,
-  locale: string,
-): Promise<LocaleAssets> {
-  const shotDir = join(cfg.outDir, "screenshots", deviceKey, locale);
-  const previewDir = join(cfg.outDir, "previews", deviceKey, locale);
-  const sceneOrder = cfg.scenes.filter(isScreenshot).map((s) => s.id);
-
-  const screenshots: LocaleAssets["screenshots"] = [];
-  for (const name of (await ls(shotDir)).filter((f) => f.endsWith(".png")).sort()) {
-    const file = join(shotDir, name);
-    const { width, height } = await imageSize(file);
-    // Files are named "<index>-<sceneId>.png".
-    const sceneId = sceneOrder.find((id) => name.includes(id)) ?? basename(name, ".png");
-    screenshots.push({
-      sceneId,
-      url: `screenshots/${deviceKey}/${locale}/${name}`,
-      width,
-      height,
-      bytes: (await stat(file)).size,
+export async function saveDesign(design: SavedDesign, projectId?: string): Promise<void> {
+  if (projectId && projectId !== "demo") {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/design`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(design),
     });
+    if (!res.ok) throw new Error(`Could not save project design (${res.status}).`);
+    return;
   }
-
-  const previewScene = cfg.scenes.find(isPreview);
-  const previewName = (await ls(previewDir)).find((f) => f.endsWith(".mp4"));
-  let preview: LocaleAssets["preview"] = null;
-  if (previewScene && previewName) {
-    const file = join(previewDir, previewName);
-    const probe = await videoInfo(file);
-    preview = {
-      sceneId: previewScene.id,
-      url: `previews/${deviceKey}/${locale}/${previewName}`,
-      ...probe,
-      bytes: (await stat(file)).size,
-    };
+  try {
+    const res = await fetch("/api/design", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(design),
+    });
+    if (res.ok) return;
+  } catch {
+    // The standalone Studio has no API; persist the demo choices locally.
   }
-
-  return { screenshots, preview };
+  localStorage.setItem(LOCAL_DESIGN_KEY, JSON.stringify(design));
 }
 
-const ls = async (dir: string) => readdir(dir).catch(() => [] as string[]);
+const LOCAL_DESIGN_KEY = "goldie-studio:standalone-design";
 
-/**
- * Directory link, replaced on every run so a moved out/ never goes stale.
- * A relative symlink on macOS and Linux. On Windows a directory symlink needs
- * Developer Mode or a privilege most accounts lack, so an NTFS junction is
- * used instead; junctions need an absolute target and no special rights.
- */
-async function link(target: string, path: string): Promise<void> {
-  // Unlink an existing link by name; a recursive rm must never follow a
-  // junction into the real captures on a rerun.
-  const existing = await lstat(path).catch(() => null);
-  if (existing?.isSymbolicLink()) await unlink(path);
-  else if (existing) await rm(path, { recursive: true, force: true });
-  if (process.platform === "win32") {
-    await mkdir(target, { recursive: true }); // a junction to a missing dir is dangling
-    await symlink(resolve(target), path, "junction");
-  } else {
-    await symlink(relative(dirname(path), target), path, "dir");
+function loadLocalDesign(): SavedDesign {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_DESIGN_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? (parsed as SavedDesign) : {};
+  } catch {
+    return {};
   }
-}
-
-async function videoInfo(file: string) {
-  const r = await execOrThrow("ffprobe", [
-    "-v",
-    "error",
-    "-select_streams",
-    "v:0",
-    "-show_entries",
-    "stream=width,height:format=duration",
-    "-of",
-    "json",
-    file,
-  ]);
-  const probe = JSON.parse(r.stdout);
-  return {
-    width: probe.streams[0].width as number,
-    height: probe.streams[0].height as number,
-    durationSeconds: Number(probe.format.duration),
-  };
 }

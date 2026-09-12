@@ -1,6 +1,6 @@
 /**
  * Browser-side layout engine. This intentionally lives inside Studio so the
- * standalone app can build without importing the Goldie CLI source tree.
+ * the standalone app can build without external rendering dependencies.
  */
 
 export const LAYOUT_KEYS = [

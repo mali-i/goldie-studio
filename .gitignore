@@ -1,17 +1,5 @@
-node_modules
-.DS_Store
-.argent/
-studio/node_modules
-studio/dist
-studio/workspace/
+node_modules/
+dist/
+workspace/
 *.tsbuildinfo
-
-# App-specific config; copy goldie.config.example.ts
-goldie.config.ts
-goldie.design.json
-
-# Generated assets: screenshots, previews, staged frames, export bundles
-out/
-
-# npm build output
-dist
+.DS_Store
