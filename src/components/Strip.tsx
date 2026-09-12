@@ -12,7 +12,6 @@ import {
   type LayoutKey,
   resolveScenes,
   SCREEN_SHADOW,
-  TYPE,
 } from "../lib/layouts";
 import type {
   Decoration,
@@ -718,6 +717,7 @@ function ScreenshotScene({
   const { w, h } = cq(tile);
   // Wider-than-reference tiles compose at a narrower design width; type follows it.
   const typeScale = c.designWidth / tile.width;
+  const type = c.type;
   const editable = onEdit ? editableProps : () => ({});
   const copy = c.copy;
   return (
@@ -750,7 +750,7 @@ function ScreenshotScene({
               display: "flex",
               flexDirection: "column",
               alignItems: copy.align === "left" ? "flex-start" : "center",
-              gap: h(tile.height * TYPE.gap),
+              gap: h(tile.height * type.gap),
               textAlign: copy.align,
             }}
           >
@@ -758,10 +758,10 @@ function ScreenshotScene({
               style={{
                 margin: 0,
                 color: headlineColor,
-                fontSize: `${TYPE.headlineSize * typeScale * 100}cqw`,
-                lineHeight: TYPE.headlineLineHeight,
-                fontWeight: TYPE.headlineWeight,
-                letterSpacing: `${TYPE.headlineTracking * typeScale * 100}cqw`,
+                fontSize: `${type.headlineSize * typeScale * 100}cqw`,
+                lineHeight: type.headlineLineHeight,
+                fontWeight: type.headlineWeight,
+                letterSpacing: `${type.headlineTracking * typeScale * 100}cqw`,
               }}
               {...editable((text) => onEdit?.("headline", text), headline, "Headline")}
             >
@@ -772,9 +772,9 @@ function ScreenshotScene({
                 style={{
                   margin: 0,
                   color: subheadColor,
-                  fontSize: `${TYPE.subheadSize * typeScale * 100}cqw`,
-                  lineHeight: TYPE.subheadLineHeight,
-                  fontWeight: TYPE.subheadWeight,
+                  fontSize: `${type.subheadSize * typeScale * 100}cqw`,
+                  lineHeight: type.subheadLineHeight,
+                  fontWeight: type.subheadWeight,
                   minWidth: "30cqw",
                 }}
                 {...editable((text) => onEdit?.("subhead", text), subhead ?? "", "Subhead")}

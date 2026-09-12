@@ -57,6 +57,21 @@ export const TYPE = {
   gap: 0.014,
 } as const;
 
+/** Typography tuned for a 16:10 desktop screenshot rather than a narrow phone tile. */
+export const LANDSCAPE_TYPE = {
+  headlineSize: 0.048,
+  headlineLineHeight: 1.08,
+  headlineTracking: -0.0009,
+  headlineWeight: 700,
+  subheadSize: 0.022,
+  subheadLineHeight: 1.3,
+  subheadWeight: 400,
+  padX: 0.06,
+  padTop: 0.065,
+  padBottom: 0.06,
+  gap: 0.012,
+} as const;
+
 export const BADGE = {
   fontSize: 0.03,
   weight: 700,
@@ -178,6 +193,77 @@ export const LAYOUTS: Record<LayoutKey, LayoutSpec> = {
   },
 };
 
+/**
+ * The same eleven layout concepts re-composed for a wide Mac canvas. Device
+ * widths are fractions of one 2880px tile; panorama coordinates still span
+ * two tiles, matching the portrait layout contract.
+ */
+export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
+  classic: {
+    ...LAYOUTS.classic,
+    copy: { position: "top", align: "center", heightRatio: 0.28, widthRatio: 0.76 },
+    devices: single({ widthRatio: 0.76, x: 0.5, y: 0.62, fitBelowCopy: true }),
+  },
+  "copy-below": {
+    ...LAYOUTS["copy-below"],
+    copy: { position: "bottom", align: "center", heightRatio: 0.27, widthRatio: 0.76 },
+    devices: single({ widthRatio: 0.76, x: 0.5, y: 0.26 }),
+  },
+  hero: {
+    ...LAYOUTS.hero,
+    copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.8 },
+    devices: single({ widthRatio: 0.86, x: 0.5, y: 0.72 }),
+  },
+  offset: {
+    ...LAYOUTS.offset,
+    copy: { position: "top", align: "left", heightRatio: 0.28, widthRatio: 0.52 },
+    devices: single({ widthRatio: 0.74, x: 0.63, y: 0.69 }),
+  },
+  tilt: {
+    ...LAYOUTS.tilt,
+    copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
+    devices: single({ widthRatio: 0.8, x: 0.5, y: 0.72, rotate: -3 }),
+  },
+  "tilt-right": {
+    ...LAYOUTS["tilt-right"],
+    copy: { position: "top", align: "left", heightRatio: 0.28, widthRatio: 0.52 },
+    devices: single({ widthRatio: 0.74, x: 0.64, y: 0.7, rotate: 4 }),
+  },
+  duo: {
+    ...LAYOUTS.duo,
+    copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
+    devices: [
+      { widthRatio: 0.5, x: 0.32, y: 0.57, rotate: 0, capture: "secondary" },
+      { widthRatio: 0.56, x: 0.66, y: 0.7, rotate: 0, capture: "primary" },
+    ],
+  },
+  "duo-tilt": {
+    ...LAYOUTS["duo-tilt"],
+    copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 0.8 },
+    devices: [
+      { widthRatio: 0.48, x: 0.31, y: 0.56, rotate: -4, capture: "secondary" },
+      { widthRatio: 0.54, x: 0.67, y: 0.71, rotate: 3, capture: "primary" },
+    ],
+  },
+  panorama: {
+    ...LAYOUTS.panorama,
+    copy: { position: "top", align: "left", heightRatio: 0.28, x: 0.055, widthRatio: 0.72 },
+    devices: single({ widthRatio: 0.96, x: 0.54, y: 0.76, rotate: -3 }),
+  },
+  "panorama-duo": {
+    ...LAYOUTS["panorama-duo"],
+    copy: { position: "top", align: "center", heightRatio: 0.25, widthRatio: 1.45 },
+    devices: [
+      { widthRatio: 0.76, x: 0.27, y: 0.7, rotate: 3, capture: "primary" },
+      { widthRatio: 0.76, x: 0.73, y: 0.7, rotate: -3, capture: "secondary" },
+    ],
+  },
+  minimal: {
+    ...LAYOUTS.minimal,
+    devices: single({ widthRatio: 0.88, x: 0.5, y: 0.5 }),
+  },
+};
+
 export function isLayoutKey(key: string): key is LayoutKey {
   return (LAYOUT_KEYS as readonly string[]).includes(key);
 }
@@ -283,6 +369,7 @@ export type Composition = {
     maxWidth: number;
     box: Rect;
   } | null;
+  type: typeof TYPE | typeof LANDSCAPE_TYPE;
   devices: Array<{
     frame: Rect;
     screen: Rect & { radius: number };
@@ -306,6 +393,9 @@ export function compose(
   opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
 ): Composition {
   const geom = opts.geom ?? FRAME;
+  const landscape = tileIn.width > tileIn.height;
+  const resolvedSpec = landscape ? LANDSCAPE_LAYOUTS[spec.key] : spec;
+  const type = landscape ? LANDSCAPE_TYPE : TYPE;
   // Keep wider portrait store sizes aligned to the iPhone reference, but let
   // landscape targets such as Mac use their full canvas width.
   const tile =
@@ -313,45 +403,51 @@ export function compose(
       ? { width: tileIn.height * REF_TILE_ASPECT, height: tileIn.height }
       : tileIn;
   const dx = (spec.span * (tileIn.width - tile.width)) / 2;
-  const width = tile.width * spec.span;
+  const width = tile.width * resolvedSpec.span;
   const height = tile.height;
   const art = opts.screenOnly
     ? { width: geom.screen.width, height: geom.screen.height, screen: { x: 0, y: 0 } }
     : { width: geom.width, height: geom.height, screen: geom.screen };
-  const classic = spec.key === "classic";
+  const classic = resolvedSpec.key === "classic";
   const copyHeight =
-    spec.copy.position === "none"
+    resolvedSpec.copy.position === "none"
       ? 0
-      : tile.height * (classic ? theme.copyHeightRatio : (spec.copy.heightRatio ?? 0.24));
-  const padX = tile.width * TYPE.padX;
-  const maxWidth = spec.copy.widthRatio ? tile.width * spec.copy.widthRatio : tile.width - 2 * padX;
+      : tile.height *
+        (resolvedSpec.copy.heightRatio ?? (classic ? theme.copyHeightRatio : 0.24));
+  const padX = tile.width * type.padX;
+  const maxWidth = resolvedSpec.copy.widthRatio
+    ? tile.width * resolvedSpec.copy.widthRatio
+    : tile.width - 2 * padX;
 
   let copy: Composition["copy"] = null;
-  if (spec.copy.position !== "none") {
+  if (resolvedSpec.copy.position !== "none") {
     const x =
-      spec.copy.x !== undefined
-        ? width * spec.copy.x
-        : spec.copy.align === "left"
+      resolvedSpec.copy.x !== undefined
+        ? width * resolvedSpec.copy.x
+        : resolvedSpec.copy.align === "left"
           ? padX
           : width / 2;
-    const copyDx = spec.copy.align === "left" ? 0 : dx;
-    const boxLeft = spec.copy.align === "left" ? x : x - maxWidth / 2;
-    const top = spec.copy.position === "top" ? 0 : height - copyHeight;
+    const copyDx = resolvedSpec.copy.align === "left" ? 0 : dx;
+    const boxLeft = resolvedSpec.copy.align === "left" ? x : x - maxWidth / 2;
+    const top = resolvedSpec.copy.position === "top" ? 0 : height - copyHeight;
     copy = {
-      position: spec.copy.position,
-      align: spec.copy.align,
+      position: resolvedSpec.copy.position,
+      align: resolvedSpec.copy.align,
       x: x + copyDx,
-      y: spec.copy.position === "top" ? height * TYPE.padTop : height - height * TYPE.padBottom,
+      y:
+        resolvedSpec.copy.position === "top"
+          ? height * type.padTop
+          : height - height * type.padBottom,
       maxWidth,
       box: { left: boxLeft + copyDx, top, width: maxWidth, height: copyHeight },
     };
   }
 
   const squat = tile !== tileIn;
-  const devices = spec.devices.map((placement) => {
-    const widthRatio = classic ? theme.deviceWidthRatio : placement.widthRatio;
+  const devices = resolvedSpec.devices.map((placement) => {
+    const widthRatio = classic && !landscape ? theme.deviceWidthRatio : placement.widthRatio;
     const deviceTile =
-      squat && !placement.fitBelowCopy && spec.copy.position !== "none" ? tileIn : tile;
+      squat && !placement.fitBelowCopy && resolvedSpec.copy.position !== "none" ? tileIn : tile;
     let scale = (deviceTile.width * widthRatio) / art.width;
     let left: number;
     let top: number;
@@ -362,7 +458,7 @@ export function compose(
       left = (width - art.width * scale) / 2 + dx;
       top = copyHeight + (available - art.height * scale) / 2;
     } else {
-      left = tileIn.width * spec.span * placement.x - (art.width * scale) / 2;
+      left = tileIn.width * resolvedSpec.span * placement.x - (art.width * scale) / 2;
       top = height * placement.y - (art.height * scale) / 2;
       if (squat && copy?.position === "top") top = Math.max(top, copy.box.height + height * 0.015);
       if (squat && copy?.position === "bottom") {
@@ -382,7 +478,14 @@ export function compose(
       capture: placement.capture,
     };
   });
-  return { width: tileIn.width * spec.span, height, copy, devices, designWidth: tile.width };
+  return {
+    width: tileIn.width * resolvedSpec.span,
+    height,
+    copy,
+    type,
+    devices,
+    designWidth: tile.width,
+  };
 }
 
 function needsSecondCapture(spec: LayoutSpec): boolean {
