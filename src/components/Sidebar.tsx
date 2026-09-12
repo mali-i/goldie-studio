@@ -72,12 +72,14 @@ export function Sidebar({
   template,
   layout,
   screenOnly,
+  sceneOrder,
   onBackground,
   onFrame,
   onFontFamily,
   onTemplate,
   onLayout,
   onScreenOnly,
+  onSceneReorder,
 }: {
   projectId: string;
   projects: ProjectSummary[];
@@ -100,12 +102,14 @@ export function Sidebar({
   template: string;
   layout: string;
   screenOnly: boolean;
+  sceneOrder: string[];
   onBackground: (v: string) => void;
   onFrame: (v: string) => void;
   onFontFamily: (v: string) => void;
   onTemplate: (v: string) => void;
   onLayout: (v: string) => void;
   onScreenOnly: (v: boolean) => void;
+  onSceneReorder: (order: string[]) => void;
 }) {
   const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   return (
@@ -208,6 +212,8 @@ export function Sidebar({
           locale={locale}
           scenes={manifest.design.scenes}
           captures={manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device]}
+          order={sceneOrder}
+          onReorder={onSceneReorder}
           onChanged={onAssetsChanged}
         />
         <DesignPanel

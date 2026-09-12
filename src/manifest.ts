@@ -61,7 +61,12 @@ export type BundledFont = {
 };
 
 export type DeviceCaptures = {
-  screenshots: Array<{ sceneId: string; url: string }>;
+  screenshots: Array<{
+    sceneId: string;
+    /** Older generated manifests omit this and are treated as primary. */
+    slot?: "primary" | "secondary";
+    url: string;
+  }>;
   clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
 };
 

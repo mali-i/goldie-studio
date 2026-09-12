@@ -20,6 +20,12 @@ export const projectApi = {
       body: JSON.stringify({ name }),
     }),
   get: (id: string) => json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}`),
+  addScene: (id: string) =>
+    json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/scenes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }),
   saveConfig: (id: string, config: GoldieProjectConfig) =>
     json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/config`, {
       method: "PUT",
@@ -32,9 +38,15 @@ export const projectApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     }),
-  removeScreenshot: (id: string, sceneId: string, device: string, locale: string) =>
+  removeScreenshot: (
+    id: string,
+    sceneId: string,
+    device: string,
+    locale: string,
+    slot: "primary" | "secondary",
+  ) =>
     json<ProjectDetail>(
-      `/api/projects/${encodeURIComponent(id)}/screenshots/${encodeURIComponent(sceneId)}?device=${encodeURIComponent(device)}&locale=${encodeURIComponent(locale)}`,
+      `/api/projects/${encodeURIComponent(id)}/screenshots/${encodeURIComponent(sceneId)}?device=${encodeURIComponent(device)}&locale=${encodeURIComponent(locale)}&slot=${slot}`,
       { method: "DELETE" },
     ),
 };

@@ -92,6 +92,13 @@ function createHandler(root: string) {
         }
         return methodNotAllowed(res);
       }
+      if (action === "scenes") {
+        if (parts.length === 4 && req.method === "POST") {
+          const body = await readJson<{ headline?: string }>(req);
+          return sendJson(res, await addScene(root, id, body.headline), 201);
+        }
+        return methodNotAllowed(res);
+      }
       if (action === "screenshots") {
         if (parts.length === 4 && req.method === "POST") {
           const upload = await readJson<UploadScreenshotInput>(req);
@@ -106,6 +113,7 @@ function createHandler(root: string) {
               decodeURIComponent(parts[4] ?? ""),
               url.searchParams.get("device") ?? "",
               url.searchParams.get("locale") ?? "",
+              url.searchParams.get("slot") ?? "primary",
             ),
           );
         }
@@ -305,13 +313,30 @@ async function readConfig(root: string, id: string): Promise<GoldieProjectConfig
     GoldieProjectConfig,
     "frame"
   > & { frame?: { variant?: string } };
+  let migrated = false;
+  // Older Studio projects stored one path directly at sources[device][locale].
+  // Promote it to the primary slot while keeping the original asset in place.
+  for (const scene of config.scenes ?? []) {
+    const devices = scene.sources as unknown as Record<string, Record<string, unknown>>;
+    for (const locales of Object.values(devices ?? {})) {
+      for (const [locale, value] of Object.entries(locales)) {
+        if (typeof value === "string") {
+          locales[locale] = { primary: value };
+          migrated = true;
+        }
+      }
+    }
+  }
   // `17-pro-classic` briefly existed as a generated SVG option. Migrate
   // projects created during that version to the real bundled blue PNG.
   if (config.frame?.variant === "17-pro-classic") {
     config.frame.variant = "17-pro-blue";
-    await atomicWrite(configFile(root, id), serializeConfig(config as GoldieProjectConfig));
+    migrated = true;
   }
   validateConfig(config as GoldieProjectConfig);
+  if (migrated) {
+    await atomicWrite(configFile(root, id), serializeConfig(config as GoldieProjectConfig));
+  }
   return config as GoldieProjectConfig;
 }
 
@@ -339,12 +364,42 @@ function validateConfig(config: GoldieProjectConfig): void {
   }
   const ids = new Set<string>();
   for (const scene of config.scenes ?? []) {
-    if (!SCENE_ID.test(scene.id) || ids.has(scene.id)) throw new HttpError(422, `Invalid or duplicate scene id: ${scene.id}`);
+    if (!SCENE_ID.test(scene.id) || ids.has(scene.id)) {
+      throw new HttpError(422, `Invalid or duplicate scene id: ${scene.id}`);
+    }
     ids.add(scene.id);
     for (const locales of Object.values(scene.sources ?? {})) {
-      for (const path of Object.values(locales)) checkedRelativeAsset(path);
+      for (const slots of Object.values(locales)) {
+        if (!slots || typeof slots !== "object") throw new HttpError(422, "Invalid screenshot slots.");
+        for (const [slot, path] of Object.entries(slots)) {
+          if (slot !== "primary" && slot !== "secondary") {
+            throw new HttpError(422, `Invalid screenshot slot: ${slot}`);
+          }
+          checkedRelativeAsset(path);
+        }
+      }
     }
   }
+}
+
+async function addScene(
+  root: string,
+  id: string,
+  requestedHeadline?: string,
+): Promise<ProjectDetail> {
+  const config = await readConfig(root, id);
+  const used = new Set(config.scenes.map((scene) => scene.id));
+  let number = config.scenes.length + 1;
+  while (used.has(`scene-${number}`)) number += 1;
+  const sceneId = `scene-${number}`;
+  const locale = config.locales[0] ?? "en-US";
+  config.scenes.push({
+    id: sceneId,
+    sources: {},
+    headline: { [locale]: requestedHeadline?.trim() || `Scene ${number}` },
+  });
+  await writeConfig(root, id, config);
+  return touchProject(root, id, config.store.name);
 }
 
 async function saveScreenshot(
@@ -363,33 +418,38 @@ async function saveScreenshot(
     throw new HttpError(413, "Screenshot must be between 1 byte and 25 MB.");
   }
   const format = imageFormat(bytes);
-  if (!format || format.mime !== input.mimeType) throw new HttpError(415, "Only valid PNG, JPEG and WebP images are accepted.");
+  if (!format || format.mime !== input.mimeType) {
+    throw new HttpError(415, "Only valid PNG, JPEG and WebP images are accepted.");
+  }
+  const slot = input.slot ?? "primary";
+  if (slot !== "primary" && slot !== "secondary") throw new HttpError(422, "Screenshot slot must be primary or secondary.");
 
   const config = await readConfig(root, id);
   if (!config.devices.includes(input.device)) config.devices.push(input.device);
   if (!config.locales.includes(input.locale)) config.locales.push(input.locale);
   let scene = config.scenes.find((candidate) => candidate.id === input.sceneId);
-  if (!scene) {
-    scene = {
-      id: input.sceneId,
-      sources: {},
-      headline: { [input.locale]: input.headline?.trim() || humanize(input.sceneId) },
-      ...(input.subhead?.trim() ? { subhead: { [input.locale]: input.subhead.trim() } } : {}),
-    };
-    config.scenes.push(scene);
-  }
+  if (!scene) throw new HttpError(404, `Scene ${input.sceneId} does not exist.`);
   scene.headline[input.locale] = input.headline?.trim() || scene.headline[input.locale] || humanize(input.sceneId);
   if (input.subhead?.trim()) scene.subhead = { ...scene.subhead, [input.locale]: input.subhead.trim() };
 
   // Config files are portable between macOS, Linux and Windows, so asset
   // references always use URL/POSIX separators rather than node:path.join.
-  const relativePath = ["screenshots", input.device, input.locale, `${input.sceneId}.${format.ext}`].join("/");
-  const previous = scene.sources[input.device]?.[input.locale];
+  const relativePath = [
+    "screenshots",
+    input.device,
+    input.locale,
+    input.sceneId,
+    `${slot}.${format.ext}`,
+  ].join("/");
+  const previous = scene.sources[input.device]?.[input.locale]?.[slot];
   const file = safeProjectPath(root, id, relativePath);
   await mkdir(dirname(file), { recursive: true });
   await atomicWrite(file, bytes);
   if (previous && previous !== relativePath) await rm(safeProjectPath(root, id, previous), { force: true });
-  scene.sources[input.device] = { ...scene.sources[input.device], [input.locale]: relativePath };
+  scene.sources[input.device] = {
+    ...scene.sources[input.device],
+    [input.locale]: { ...scene.sources[input.device]?.[input.locale], [slot]: relativePath },
+  };
   await writeConfig(root, id, config);
   return touchProject(root, id, config.store.name);
 }
@@ -400,17 +460,17 @@ async function deleteScreenshot(
   sceneId: string,
   device: string,
   locale: string,
+  requestedSlot = "primary",
 ): Promise<ProjectDetail> {
+  if (requestedSlot !== "primary" && requestedSlot !== "secondary") throw new HttpError(422, "Invalid screenshot slot.");
   const config = await readConfig(root, id);
   const scene = config.scenes.find((candidate) => candidate.id === sceneId);
-  const source = scene?.sources[device]?.[locale];
+  const source = scene?.sources[device]?.[locale]?.[requestedSlot];
   if (!scene || !source) throw new HttpError(404, "Screenshot not found.");
   await rm(safeProjectPath(root, id, source), { force: true });
-  delete scene.sources[device]![locale];
+  delete scene.sources[device]![locale]![requestedSlot];
+  if (Object.keys(scene.sources[device]![locale]!).length === 0) delete scene.sources[device]![locale];
   if (Object.keys(scene.sources[device]!).length === 0) delete scene.sources[device];
-  if (Object.values(scene.sources).every((locales) => Object.keys(locales).length === 0)) {
-    config.scenes = config.scenes.filter((candidate) => candidate.id !== sceneId);
-  }
   await writeConfig(root, id, config);
   return touchProject(root, id, config.store.name);
 }
@@ -463,22 +523,29 @@ async function projectDesign(root: string, id: string) {
 
 async function projectManifest(root: string, id: string) {
   const { config } = await readProject(root, id);
-  const capturesByLocale: Record<string, Record<string, { screenshots: Array<{ sceneId: string; url: string }>; clips: null }>> = {};
+  type WorkspaceCapture = {
+    screenshots: Array<{ sceneId: string; slot: "primary" | "secondary"; url: string }>;
+    clips: null;
+  };
+  const capturesByLocale: Record<string, Record<string, WorkspaceCapture>> = {};
   for (const device of config.devices) {
     capturesByLocale[device] = {};
     for (const locale of config.locales) {
       capturesByLocale[device][locale] = {
         screenshots: config.scenes.flatMap((scene) => {
-          const source = scene.sources[device]?.[locale];
-          return source
-            ? [{ sceneId: scene.id, url: `api/projects/${encodeURIComponent(id)}/assets/${source.split("/").map(encodeURIComponent).join("/")}` }]
-            : [];
+          const slots = scene.sources[device]?.[locale];
+          return (["primary", "secondary"] as const).flatMap((slot) => {
+            const source = slots?.[slot];
+            return source
+              ? [{ sceneId: scene.id, slot, url: `api/projects/${encodeURIComponent(id)}/assets/${source.split("/").map(encodeURIComponent).join("/")}` }]
+              : [];
+          });
         }),
         clips: null,
       };
     }
   }
-  const captures: Record<string, { screenshots: Array<{ sceneId: string; url: string }>; clips: null }> = {};
+  const captures: Record<string, WorkspaceCapture> = {};
   for (const device of config.devices) captures[device] = capturesByLocale[device]?.[config.locales[0]!] ?? { screenshots: [], clips: null };
   return {
     generatedAt: new Date().toISOString(),
@@ -666,6 +733,7 @@ export const workspaceService = {
   listProjects,
   createProject,
   readProject,
+  addScene,
   saveScreenshot,
   deleteScreenshot,
   applyDesign,

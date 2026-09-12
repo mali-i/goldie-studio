@@ -21,11 +21,12 @@ describe("workspace projects", () => {
     expect(alpha.project.id).toBe("Alpha");
     expect(beta.project.id).toBe("Beta");
     expect(duplicate.project.id).toBe("Alpha-2");
+    expect(alpha.config.scenes).toHaveLength(3);
 
     await workspaceService.saveScreenshot(root, alpha.project.id, {
       device: "iphone-6.9",
       locale: "en-US",
-      sceneId: "home",
+      sceneId: "scene-1",
       headline: "Welcome home",
       mimeType: "image/png",
       base64: png,
@@ -54,10 +55,10 @@ describe("workspace projects", () => {
     expect(await workspaceService.listProjects(root)).toHaveLength(3);
 
     await workspaceService.applyDesign(root, alpha.project.id, {
-      sceneLayouts: { home: "hero" },
+      sceneLayouts: { "scene-1": "hero" },
     });
     expect((await workspaceService.projectDesign(root, alpha.project.id)).sceneLayouts).toEqual({
-      home: "hero",
+      "scene-1": "hero",
     });
     await workspaceService.applyDesign(root, alpha.project.id, { sceneLayouts: {} });
     expect((await workspaceService.projectDesign(root, alpha.project.id)).sceneLayouts).toEqual({});
@@ -65,7 +66,7 @@ describe("workspace projects", () => {
     await workspaceService.deleteScreenshot(
       root,
       alpha.project.id,
-      "home",
+      "scene-1",
       "iphone-6.9",
       "en-US",
     );
@@ -82,7 +83,7 @@ describe("workspace projects", () => {
     const invalid = {
       device: "../outside",
       locale: "en-US",
-      sceneId: "home",
+      sceneId: "scene-1",
       mimeType: "image/png",
       base64: Buffer.from("not an image").toString("base64"),
     };
@@ -97,6 +98,51 @@ describe("workspace projects", () => {
     ).rejects.toThrow("Only valid PNG, JPEG and WebP");
   });
 
+  test("keeps scenes fixed while managing two screenshot slots", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Scene Slots");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    expect(project.config.scenes.map((scene) => scene.id)).toEqual([
+      "scene-1",
+      "scene-2",
+      "scene-3",
+    ]);
+    await workspaceService.addScene(root, project.project.id);
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "iphone-6.9",
+      locale: "en-US",
+      sceneId: "scene-1",
+      slot: "secondary",
+      mimeType: "image/png",
+      base64: png,
+    });
+
+    const manifest = (await workspaceService.projectManifest(root, project.project.id)) as {
+      design: {
+        scenes: Array<{ id: string }>;
+        captures: Record<string, { screenshots: Array<{ sceneId: string; slot: string }> }>;
+      };
+    };
+    expect(manifest.design.scenes).toHaveLength(4);
+    expect(manifest.design.captures["iphone-6.9"]?.screenshots).toEqual([
+      expect.objectContaining({ sceneId: "scene-1", slot: "secondary" }),
+    ]);
+
+    await workspaceService.deleteScreenshot(
+      root,
+      project.project.id,
+      "scene-1",
+      "iphone-6.9",
+      "en-US",
+      "secondary",
+    );
+    const afterDelete = await workspaceService.readProject(root, project.project.id);
+    expect(afterDelete.config.scenes).toHaveLength(4);
+    expect(afterDelete.config.scenes[0]?.sources).toEqual({});
+  });
+
   test("publishes the Mac canvas specification through the shared manifest flow", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);
@@ -106,7 +152,7 @@ describe("workspace projects", () => {
     await workspaceService.saveScreenshot(root, project.project.id, {
       device: "mac-2880x1800",
       locale: "en-US",
-      sceneId: "desktop",
+      sceneId: "scene-1",
       mimeType: "image/png",
       base64: png,
     });
@@ -144,6 +190,35 @@ describe("workspace projects", () => {
       "17-pro-blue",
     );
     expect(await readFile(path, "utf8")).not.toContain("17-pro-classic");
+  });
+
+  test("migrates legacy single screenshot sources into the primary slot", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Legacy Screenshot");
+    const path = join(root, project.project.id, "goldie.config.ts");
+    const legacy = {
+      ...project.config,
+      scenes: [
+        {
+          ...project.config.scenes[0]!,
+          sources: {
+            "iphone-6.9": { "en-US": "screenshots/iphone-6.9/en-US/scene-1.png" },
+          },
+        },
+        ...project.config.scenes.slice(1),
+      ],
+    };
+    await writeFile(
+      path,
+      `const config = /* goldie-config:start */${JSON.stringify(legacy, null, 2)}/* goldie-config:end */;\nexport default config;\n`,
+    );
+
+    const migrated = await workspaceService.readProject(root, project.project.id);
+    expect(migrated.config.scenes[0]?.sources["iphone-6.9"]?.["en-US"]).toEqual({
+      primary: "screenshots/iphone-6.9/en-US/scene-1.png",
+    });
+    expect(await readFile(path, "utf8")).toContain('"primary"');
   });
 
   test("migrates projects from workspace/projects into the flat layout", async () => {

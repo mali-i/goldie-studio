@@ -155,10 +155,12 @@ export function Strip({
       ? "#5A6A7D"
       : theme.subheadColor;
 
-  const allShots = scenes.flatMap((scene) => {
-    const capture = captures.screenshots.find((s) => s.sceneId === scene.id);
-    return capture ? [{ scene, capture }] : [];
-  });
+  // Scenes are the stable units of the strip. Captures merely fill one of
+  // their two screen slots, so an empty scene remains visible and editable.
+  const allShots = scenes.map((scene) => ({ scene }));
+  const legacyCaptures =
+    captures.screenshots.length > 0 &&
+    captures.screenshots.every((shot) => shot.slot === undefined);
   // Apple's cap counts tiles, so a panorama scene uses two of the ten.
   let used = 0;
   const shots = allShots.filter(({ scene }) => {
@@ -190,6 +192,8 @@ export function Strip({
     badReason?: string;
     /** Whether the lightbox offers in-place copy editing (screenshots only). */
     editable: boolean;
+    /** Empty screen slots stay on the canvas but must not become exported store art. */
+    exportable: boolean;
     /** The composition; editable renders the copy as editable text (lightbox only). */
     scene: (editable: boolean) => ReactNode;
     /** Set on screenshot tiles, which can be dragged into a new order. */
@@ -214,26 +218,44 @@ export function Strip({
       bad: outOfBounds,
       badReason: "Clips sum outside the 15-30s Apple allows for previews.",
       editable: false,
+      exportable: false,
       scene: () => <PreviewScene segments={segments} />,
     });
   }
-  for (const { scene, capture } of shots) {
+  for (const { scene } of shots) {
     const { layout: spec, secondScene } = layoutOf(scene);
-    const second = secondScene
-      ? captures.screenshots.find((s) => s.sceneId === secondScene)
-      : undefined;
+    const primary = captures.screenshots.find(
+      (s) => s.sceneId === scene.id && (s.slot ?? "primary") === "primary",
+    );
+    // New projects keep both captures on the same scene. The secondScene
+    // fallback preserves bundled and externally generated legacy manifests.
+    const secondary =
+      captures.screenshots.find((s) => s.sceneId === scene.id && s.slot === "secondary") ??
+      (legacyCaptures && secondScene
+        ? captures.screenshots.find(
+            (s) => s.sceneId === secondScene && (s.slot ?? "primary") === "primary",
+          )
+        : undefined);
     const layoutControl = {
       value: sceneLayouts[scene.id],
       defaultKey: defaultLayoutOf(scene),
       onChange: (key: string | undefined) => onSceneLayout(scene.id, key),
     };
+    const needsSecondary = spec.devices.some((device) => device.capture === "secondary");
+    const exportable = Boolean(primary && (!needsSecondary || secondary));
     for (let slice = 0; slice < spec.span; slice++) {
       entries.push({
         key: spec.span > 1 ? `${scene.id}#${slice + 1}` : scene.id,
         width: tileSpec.screenshot.width,
         height: tileSpec.screenshot.height,
-        bad: false,
+        bad: !exportable,
+        badReason: !primary
+          ? "Upload Screen 1 for this scene before exporting."
+          : needsSecondary && !secondary
+            ? "This layout needs Screen 2 before exporting."
+            : undefined,
         editable: true,
+        exportable,
         // Only the first slice drags; the second follows it.
         sceneId: slice === 0 ? scene.id : undefined,
         layout: layoutControl,
@@ -252,9 +274,9 @@ export function Strip({
             subhead={copy[scene.id]?.subhead?.[locale] ?? scene.subhead?.[locale]}
             headlineColor={headlineColor}
             subheadColor={subheadColor}
-            captureUrl={capture.url}
-            secondCaptureUrl={second?.url}
-            secondSceneId={secondScene}
+            sceneId={scene.id}
+            captureUrl={primary?.url}
+            secondCaptureUrl={secondary?.url}
             decorations={[...design.decorations, ...(scene.decorations ?? [])]}
             locale={locale}
             onEdit={editable ? (field, text) => onCopy(scene.id, field, text) : undefined}
@@ -365,7 +387,7 @@ export function Strip({
     <div className="flex w-full flex-col gap-3">
       <div className="pointer-events-none fixed top-0 -left-[100000px]" aria-hidden>
         {entries
-          .filter((entry) => entry.editable)
+          .filter((entry) => entry.editable && entry.exportable)
           .map((entry, index) => (
             <div
               key={`export-${entry.key}`}
@@ -685,9 +707,9 @@ function ScreenshotScene({
   subhead,
   headlineColor,
   subheadColor,
+  sceneId,
   captureUrl,
   secondCaptureUrl,
-  secondSceneId,
   decorations,
   locale,
   onEdit,
@@ -706,9 +728,9 @@ function ScreenshotScene({
   subhead: string | undefined;
   headlineColor: string;
   subheadColor: string;
-  captureUrl: string;
+  sceneId: string;
+  captureUrl: string | undefined;
   secondCaptureUrl: string | undefined;
-  secondSceneId: string | undefined;
   decorations: Decoration[];
   locale: string;
   onEdit?: (field: "headline" | "subhead", text: string) => void;
@@ -796,7 +818,9 @@ function ScreenshotScene({
               tile={tile}
               frameUrl={screenOnly ? null : frameUrl}
               captureUrl={url}
-              missing={url ? undefined : (secondSceneId ?? "secondScene")}
+              missing={
+                url ? undefined : `${sceneId} / Screen ${device.capture === "secondary" ? 2 : 1}`
+              }
             />
           );
         })}

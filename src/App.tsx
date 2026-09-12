@@ -348,17 +348,19 @@ function Loaded({
         template={template}
         layout={layout}
         screenOnly={screenOnly}
+        sceneOrder={order}
         onBackground={setBackground}
         onFrame={setFrame}
         onFontFamily={setFontFamily}
         onTemplate={setTemplate}
         onLayout={setLayout}
         onScreenOnly={setScreenOnly}
+        onSceneReorder={setOrder}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="relative grid flex-1 place-items-center overflow-auto p-10">
-          {spec && captures && captures.screenshots.length > 0 ? (
+          {spec && captures && design.scenes.length > 0 ? (
             <div className="w-full max-w-[1400px]">
               <Strip
                 design={design}
@@ -390,7 +392,7 @@ function Loaded({
               body={
                 manifest.demo
                   ? "Create a workspace project to upload and edit your own screenshots."
-                  : "Use Upload screenshots in the sidebar to add PNG, JPEG or WebP files."
+                  : "Add a scene in the sidebar, then upload PNG, JPEG or WebP screens into it."
               }
             />
           ) : (

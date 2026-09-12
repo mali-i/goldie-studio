@@ -19,8 +19,8 @@ export type ProjectSummary = {
 
 export type ProjectScene = {
   id: string;
-  /** Uploaded files, keyed by device and then locale. Paths are relative to the config. */
-  sources: Record<string, Record<string, string>>;
+  /** Uploaded files, keyed by device, locale, then the screen slot in this scene. */
+  sources: Record<string, Record<string, ScreenshotSources>>;
   headline: Record<string, string>;
   subhead?: Record<string, string>;
   background?: string;
@@ -28,6 +28,9 @@ export type ProjectScene = {
   secondScene?: string;
   decorations?: Decoration[];
 };
+
+export type ScreenshotSlot = "primary" | "secondary";
+export type ScreenshotSources = Partial<Record<ScreenshotSlot, string>>;
 
 export type ProjectStoreListing = {
   name: string;
@@ -66,6 +69,8 @@ export type UploadScreenshotInput = {
   device: string;
   locale: string;
   sceneId: string;
+  /** Omitted by older clients; those uploads continue to target the primary slot. */
+  slot?: ScreenshotSlot;
   headline?: string;
   subhead?: string;
   mimeType: string;
@@ -100,6 +105,10 @@ export function defaultProjectConfig(name: string): GoldieProjectConfig {
       layout: "classic",
       screenOnly: false,
     },
-    scenes: [],
+    scenes: [1, 2, 3].map((number) => ({
+      id: `scene-${number}`,
+      sources: {},
+      headline: { "en-US": `Scene ${number}` },
+    })),
   };
 }
