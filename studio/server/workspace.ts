@@ -387,10 +387,9 @@ async function projectManifest(root: string, id: string) {
       frameVariant: config.frame.variant,
       frameVariants: [...WORKSPACE_FRAME_VARIANTS],
       frameAssets: {
-        "17-pro-classic": "frames/frame.svg",
-        "17-pro-silver": "frames/17-pro-silver.svg",
-        "17-pro-blue": "frames/17-pro-blue.svg",
-        "17-pro-orange": "frames/17-pro-orange.svg",
+        "17-pro-silver": "frames/17-pro-silver.png",
+        "17-pro-blue": "frames/17-pro-blue.png",
+        "17-pro-orange": "frames/17-pro-orange.png",
       },
       customFrameUrl: null,
       fonts: [],

@@ -37,13 +37,8 @@ describe("workspace projects", () => {
     expect(
       (alphaManifest as typeof alphaManifest & {
         design: { frameVariants: string[]; frameAssets: Record<string, string> };
-      }).design.frameVariants,
-    ).toContain("17-pro-classic");
-    expect(
-      (alphaManifest as typeof alphaManifest & {
-        design: { frameVariants: string[]; frameAssets: Record<string, string> };
-      }).design.frameAssets["17-pro-classic"],
-    ).toBe("frames/frame.svg");
+      }).design.frameAssets["17-pro-blue"],
+    ).toBe("frames/17-pro-blue.png");
     expect(betaManifest.design.captures["iphone-6.9"]?.screenshots).toHaveLength(0);
 
     const betaConfig = await readFile(

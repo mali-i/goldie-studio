@@ -119,7 +119,6 @@ const PRESETS: Array<{ name: string; css: string }> = [
 
 /** Display names and bezel tints for the bundled variants; unknown slugs fall back to the slug. */
 const FRAME_META: Record<string, { label: string; tint: string }> = {
-  "17-pro-classic": { label: "Classic", tint: "#6D6659" },
   "17-pro-silver": { label: "Silver", tint: "#D8D9DD" },
   "17-pro-blue": { label: "Deep Blue", tint: "#2B3A5C" },
   "17-pro-orange": { label: "Cosmic Orange", tint: "#E0662F" },

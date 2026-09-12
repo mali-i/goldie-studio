@@ -34,9 +34,14 @@
       "copyHeightRatio": 0.24,
       "deviceWidthRatio": 0.84
     },
-    "frameVariant": null,
-    "frameVariants": [],
-    "customFrameUrl": "demo/frame.svg",
+    "frameVariant": "17-pro-blue",
+    "frameVariants": ["17-pro-silver", "17-pro-blue", "17-pro-orange"],
+    "frameAssets": {
+      "17-pro-silver": "frames/17-pro-silver.png",
+      "17-pro-blue": "frames/17-pro-blue.png",
+      "17-pro-orange": "frames/17-pro-orange.png"
+    },
+    "customFrameUrl": null,
     "fonts": [],
     "layouts": [
       { "key": "classic", "label": "Classic", "description": "Centred copy above a centred device.", "span": 1 },

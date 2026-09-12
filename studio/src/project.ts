@@ -2,7 +2,6 @@ import type { Decoration, Theme } from "./manifest";
 
 export const PROJECT_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_FRAME_VARIANTS = [
-  "17-pro-classic",
   "17-pro-silver",
   "17-pro-blue",
   "17-pro-orange",
