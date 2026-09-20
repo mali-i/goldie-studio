@@ -602,7 +602,9 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
                 const value = rawSlots[slot];
                 if (isSlotGeometry(value)) {
                   slots[slot] = {
-                    x: value.x, y: value.y, widthRatio: value.widthRatio, rotate: value.rotate,
+                    x: value.x, y: value.y, widthRatio: value.widthRatio,
+                    ...(value.heightRatio !== undefined ? { heightRatio: value.heightRatio } : {}),
+                    rotate: value.rotate,
                   };
                 }
               }
@@ -813,13 +815,16 @@ function isCapturePosition(value: unknown): value is { x: number; y: number } {
   );
 }
 
-function isSlotGeometry(value: unknown): value is { x: number; y: number; widthRatio: number; rotate: number } {
+function isSlotGeometry(value: unknown): value is { x: number; y: number; widthRatio: number; heightRatio?: number; rotate: number } {
   return (
     isRecord(value) &&
     typeof value.x === "number" && Number.isFinite(value.x) && value.x >= 0 && value.x <= 1 &&
     typeof value.y === "number" && Number.isFinite(value.y) && value.y >= 0 && value.y <= 1 &&
     typeof value.widthRatio === "number" && Number.isFinite(value.widthRatio) &&
     value.widthRatio >= 0.1 && value.widthRatio <= 2 &&
+    (value.heightRatio === undefined ||
+      (typeof value.heightRatio === "number" && Number.isFinite(value.heightRatio) &&
+        value.heightRatio >= 0.1 && value.heightRatio <= 2)) &&
     typeof value.rotate === "number" && Number.isFinite(value.rotate) &&
     value.rotate >= -180 && value.rotate <= 180
   );

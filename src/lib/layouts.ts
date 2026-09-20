@@ -563,30 +563,35 @@ export function compose(
     const deviceTile =
       squat && !placement.fitBelowCopy && resolvedSpec.copy.position !== "none" ? tileIn : tile;
     let scale = (deviceTile.width * widthRatio) / art.width;
+    let frameHeight = override?.heightRatio !== undefined
+      ? tile.height * override.heightRatio
+      : art.height * scale;
     let left: number;
     let top: number;
     if (placement.fitBelowCopy && !override) {
       const bottomMargin = height * CLASSIC_BOTTOM_MARGIN;
       const available = height - copyHeight - bottomMargin;
       scale = Math.min(scale, available / art.height);
+      frameHeight = art.height * scale;
       left = (width - art.width * scale) / 2 + dx;
-      top = copyHeight + (available - art.height * scale) / 2;
+      top = copyHeight + (available - frameHeight) / 2;
     } else {
       left = tileIn.width * resolvedSpec.span * (override?.x ?? placement.x) - (art.width * scale) / 2;
-      top = height * (override?.y ?? placement.y) - (art.height * scale) / 2;
+      top = height * (override?.y ?? placement.y) - frameHeight / 2;
       if (squat && !override && copy?.position === "top") top = Math.max(top, copy.box.height + height * 0.015);
       if (squat && !override && copy?.position === "bottom") {
-        top = Math.min(top, copy.box.top - height * 0.015 - art.height * scale);
+        top = Math.min(top, copy.box.top - height * 0.015 - frameHeight);
       }
     }
+    const verticalScale = frameHeight / art.height;
     return {
-      frame: { left, top, width: art.width * scale, height: art.height * scale },
+      frame: { left, top, width: art.width * scale, height: frameHeight },
       screen: {
         left: left + art.screen.x * scale,
-        top: top + art.screen.y * scale,
+        top: top + art.screen.y * verticalScale,
         width: geom.screen.width * scale,
-        height: geom.screen.height * scale,
-        radius: geom.screenRadius * scale,
+        height: geom.screen.height * verticalScale,
+        radius: geom.screenRadius * Math.min(scale, verticalScale),
       },
       rotate: override?.rotate ?? placement.rotate,
       capture: placement.capture,

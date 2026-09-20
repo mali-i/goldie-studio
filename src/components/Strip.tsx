@@ -304,6 +304,7 @@ export function Strip({
         x: (device.frame.left + device.frame.width / 2) / base.width,
         y: (device.frame.top + device.frame.height / 2) / base.height,
         widthRatio: device.frame.width / tileWidth,
+        heightRatio: device.frame.height / base.height,
         rotate: device.rotate,
       };
     }
@@ -631,6 +632,9 @@ function Lightbox({
     : entry.slotEditor?.slots[0] ?? "primary";
   const defaultGeometry = entry.slotEditor?.defaults[slot];
   const geometry = entry.slotEditor?.current[slot] ?? defaultGeometry;
+  const heightRatio = geometry && defaultGeometry
+    ? geometry.heightRatio ?? defaultGeometry.heightRatio! * geometry.widthRatio / defaultGeometry.widthRatio
+    : undefined;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement &&
@@ -684,7 +688,7 @@ function Lightbox({
           {mode === "image" && entry.repositionable
             ? <span>Drag a screenshot to adjust its crop.</span>
             : null}
-          {mode === "slot" ? <span>Drag a slot to move it.</span> : null}
+          {mode === "slot" ? <span>Drag to move; drag the corner to resize.</span> : null}
           {entry.layout ? (
             <div className="dark w-44 text-foreground">
               <Select
@@ -712,9 +716,9 @@ function Lightbox({
               />
             </div>
             <label className="flex items-center gap-2">
-              Size
+              Width
               <input
-                aria-label="Slot size"
+                aria-label="Slot width"
                 className="w-20"
                 type="range"
                 min="40" max="160" step="1"
@@ -722,9 +726,25 @@ function Lightbox({
                 onChange={(event) => entry.slotEditor?.onChange(slot, {
                   ...geometry,
                   widthRatio: defaultGeometry.widthRatio * Number(event.target.value) / 100,
+                  heightRatio,
                 })}
               />
               <span className="w-9 text-right">{Math.round(geometry.widthRatio / defaultGeometry.widthRatio * 100)}%</span>
+            </label>
+            <label className="flex items-center gap-2">
+              Height
+              <input
+                aria-label="Slot height"
+                className="w-20"
+                type="range"
+                min="40" max="160" step="1"
+                value={Math.round(heightRatio! / defaultGeometry.heightRatio! * 100)}
+                onChange={(event) => entry.slotEditor?.onChange(slot, {
+                  ...geometry,
+                  heightRatio: defaultGeometry.heightRatio! * Number(event.target.value) / 100,
+                })}
+              />
+              <span className="w-9 text-right">{Math.round(heightRatio! / defaultGeometry.heightRatio! * 100)}%</span>
             </label>
             <label className="flex items-center gap-2">
               Angle
@@ -1208,7 +1228,11 @@ function DeviceView({
       pointerId: event.pointerId,
       clientX: event.clientX,
       clientY: event.clientY,
-      start: slotGeometry,
+      start: {
+        ...slotGeometry,
+        heightRatio: slotGeometry.heightRatio ??
+          (frameElement?.offsetHeight ?? 1) / (frameElement?.parentElement?.clientHeight ?? 1),
+      },
       current: slotGeometry,
       width: frameElement?.offsetWidth ?? 1,
       height: frameElement?.offsetHeight ?? 1,
@@ -1225,10 +1249,13 @@ function DeviceView({
     const dy = event.clientY - current.clientY;
     const localX = Math.cos(radians) * dx + Math.sin(radians) * dy;
     const localY = -Math.sin(radians) * dx + Math.cos(radians) * dy;
-    const size = Math.max(0.1, Math.min(2,
-      current.start.widthRatio * (1 + localX / current.width - localY / current.height),
+    const widthRatio = Math.max(0.1, Math.min(2,
+      current.start.widthRatio * (1 + localX / current.width),
     ));
-    const next = { ...current.start, widthRatio: size };
+    const heightRatio = Math.max(0.1, Math.min(2,
+      current.start.heightRatio! * (1 + localY / current.height),
+    ));
+    const next = { ...current.start, widthRatio, heightRatio };
     current.current = next;
     onSlotGeometryDraft?.(next);
     event.preventDefault();
@@ -1241,7 +1268,8 @@ function DeviceView({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (current.current.widthRatio !== current.start.widthRatio) {
+    if (current.current.widthRatio !== current.start.widthRatio ||
+      current.current.heightRatio !== current.start.heightRatio) {
       onSlotGeometryCommit?.(current.current);
     }
     event.stopPropagation();
@@ -1339,8 +1367,8 @@ function DeviceView({
         <button
           type="button"
           aria-label={`Resize ${device.capture} slot`}
-          className="absolute -top-2 -right-2 z-10 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-sky-500 text-sm font-bold text-white shadow-lg"
-          style={{ cursor: "nesw-resize", touchAction: "none" }}
+          className="absolute -bottom-2 -right-2 z-10 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-sky-500 text-sm font-bold text-white shadow-lg"
+          style={{ cursor: "nwse-resize", touchAction: "none" }}
           onPointerDown={onResizePointerDown}
           onPointerMove={onResizePointerMove}
           onPointerUp={onResizePointerUp}
@@ -1351,7 +1379,7 @@ function DeviceView({
             event.stopPropagation();
           }}
           onClick={(event) => event.stopPropagation()}
-        >↗</button>
+        >↘</button>
       ) : null}
     </div>
   );

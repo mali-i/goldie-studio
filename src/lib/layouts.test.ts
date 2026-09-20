@@ -83,6 +83,20 @@ describe("Mac landscape layouts", () => {
     expect(edited.devices[1]).toEqual(original.devices[1]);
   });
 
+  test("slot width and height can be adjusted independently", () => {
+    const original = compose(LAYOUTS["side-by-side"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
+    const edited = compose(LAYOUTS["side-by-side"], MAC_TILE, THEME, {
+      geom: MAC_GEOMETRY,
+      slotGeometries: {
+        primary: { x: 0.27, y: 0.72, widthRatio: 0.4, heightRatio: 0.72, rotate: 0 },
+      },
+    });
+    expect(edited.devices[0]?.frame.width).toBeCloseTo(MAC_TILE.width * 0.4);
+    expect(edited.devices[0]?.frame.height).toBeCloseTo(MAC_TILE.height * 0.72);
+    expect(edited.devices[0]?.screen.height).toBeCloseTo(MAC_TILE.height * 0.72);
+    expect(edited.devices[1]).toEqual(original.devices[1]);
+  });
+
   test("screenshot pair shows two complete, separated captures beneath the copy", () => {
     const c = compose(LAYOUTS["screenshot-pair"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
     const [left, right] = c.devices;

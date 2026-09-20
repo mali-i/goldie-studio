@@ -151,40 +151,44 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">
-        {/* Every device family stays visible even when the current project has
-            not configured an upload target for it yet. */}
-        <RadioGroupPrimitive.Root
-          value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
-          onValueChange={(key) => {
-            const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
-            if (picked) onPlatform(picked);
-          }}
-          aria-label="Device type"
-          className="grid grid-cols-4 gap-2 px-5 pt-4"
-        >
-          {DEVICE_TYPES.map(({ key, icon: Icon, label, platform: target }) => (
-            <RadioGroupPrimitive.Item
-              key={key}
-              value={key}
-              disabled={!target}
-              className={cn(
-                "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
-                "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
-                "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-                "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
-                "data-disabled:pointer-events-none data-disabled:opacity-50",
-              )}
+        <div className="px-5 pt-5">
+          <Field label="Media Size">
+            {/* Every device family stays visible even when the current project has
+                not configured an upload target for it yet. */}
+            <RadioGroupPrimitive.Root
+              value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
+              onValueChange={(key) => {
+                const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
+                if (picked) onPlatform(picked);
+              }}
+              aria-label="Device type"
+              className="grid grid-cols-4 gap-2"
             >
-              <Icon className="size-4 shrink-0" aria-hidden />
-              <span>{label}</span>
-              {target ? null : (
-                <span className="absolute top-1 right-1.5 text-[9px] font-normal text-muted-foreground/70">
-                  Soon
-                </span>
-              )}
-            </RadioGroupPrimitive.Item>
-          ))}
-        </RadioGroupPrimitive.Root>
+              {DEVICE_TYPES.map(({ key, icon: Icon, label, platform: target }) => (
+                <RadioGroupPrimitive.Item
+                  key={key}
+                  value={key}
+                  disabled={!target}
+                  className={cn(
+                    "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
+                    "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
+                    "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                    "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
+                    "data-disabled:pointer-events-none data-disabled:opacity-50",
+                  )}
+                >
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  <span>{label}</span>
+                  {target ? null : (
+                    <span className="absolute top-1 right-1.5 text-[9px] font-normal text-muted-foreground/70">
+                      Soon
+                    </span>
+                  )}
+                </RadioGroupPrimitive.Item>
+              ))}
+            </RadioGroupPrimitive.Root>
+          </Field>
+        </div>
         {platformDevices.length > 1 || manifest.locales.length > 1 ? (
           <div className="flex flex-col gap-4 p-5">
             {platformDevices.length > 1 ? (

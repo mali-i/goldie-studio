@@ -431,6 +431,11 @@ function Loaded({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="relative grid flex-1 place-items-center overflow-auto p-10">
+          {spec ? (
+            <div className="absolute top-5 left-10 text-xs text-muted-foreground">
+              Media Size: {spec.screenshot.width} × {spec.screenshot.height}
+            </div>
+          ) : null}
           {spec && captures && design.scenes.length > 0 ? (
             <div className="w-full max-w-[1400px]">
               <Strip

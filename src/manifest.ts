@@ -186,8 +186,15 @@ export type CapturePositionsByDevice = Record<
 >;
 export type CapturePositions = Record<string, CapturePositionsByDevice>;
 
-/** x/y are normalized centers; widthRatio uses the layout's reference tile width. */
-export type SlotGeometry = { x: number; y: number; widthRatio: number; rotate: number };
+/** x/y are normalized centers; width/height ratios use the reference tile dimensions. */
+export type SlotGeometry = {
+  x: number;
+  y: number;
+  widthRatio: number;
+  /** Omitted by older projects, which retain the layout's original aspect ratio. */
+  heightRatio?: number;
+  rotate: number;
+};
 export type SlotGeometriesByDevice = Record<
   string,
   Record<string, Record<string, Partial<Record<"primary" | "secondary", SlotGeometry>>>>

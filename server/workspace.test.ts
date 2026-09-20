@@ -209,7 +209,7 @@ describe("workspace projects", () => {
         "iphone-6.9": {
           "en-US": {
             "side-by-side": {
-              primary: { x: 0.3, y: 0.6, widthRatio: 0.5, rotate: -8 },
+              primary: { x: 0.3, y: 0.6, widthRatio: 0.5, heightRatio: 0.68, rotate: -8 },
               secondary: { x: 0.7, y: 0.7, widthRatio: 0.42, rotate: 6 },
             },
             hero: {
