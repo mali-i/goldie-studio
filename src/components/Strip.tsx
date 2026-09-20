@@ -1,9 +1,10 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, DownloadIcon, Loader2Icon, X } from "lucide-react";
 import { AnimatePresence, Reorder } from "motion/react";
 import type React from "react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CENTER_CAPTURE_POSITION, dragCapturePosition } from "../lib/capturePosition";
+import { downloadScreenshot, renderExportTile } from "../lib/exportScreenshot";
 import {
   BADGE,
   type Composition,
@@ -477,6 +478,7 @@ export function Strip({
             <div
               key={`export-${entry.key}`}
               data-export-tile
+              data-export-key={entry.key}
               data-export-name={`${String(index + 1).padStart(2, "0")}-${entry.key.replace("#", "-")}.png`}
               style={{ position: "relative", width: entry.width, height: entry.height }}
             >
@@ -598,9 +600,11 @@ function Lightbox({
   onStep,
 }: {
   entry: {
+    key: string;
     width: number;
     height: number;
     editable: boolean;
+    exportable: boolean;
     repositionable: boolean;
     scene: (editable: boolean, editor?: SlotEditorState) => ReactNode;
     layout?: {
@@ -624,8 +628,27 @@ function Lightbox({
 }) {
   const [mode, setMode] = useState<"image" | "slot">("image");
   const [selectedSlot, setSelectedSlot] = useState<Slot>("primary");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportOne = async () => {
+    if (exporting || !entry.exportable) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const node = Array.from(document.querySelectorAll<HTMLElement>("[data-export-tile]"))
+        .find((candidate) => candidate.dataset.exportKey === entry.key);
+      if (!node) throw new Error("The screenshot is not ready to export.");
+      const blob = await renderExportTile(node);
+      downloadScreenshot(blob, node.dataset.exportName ?? `${entry.key}.png`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  };
   useEffect(() => {
     setSelectedSlot(entry.slotEditor?.slots[0] ?? "primary");
+    setExportError(null);
   }, [index]);
   const slot = entry.slotEditor?.slots.includes(selectedSlot)
     ? selectedSlot
@@ -704,7 +727,16 @@ function Lightbox({
               />
             </div>
           ) : null}
+          {entry.editable ? (
+            <Button type="button" size="sm" variant="secondary"
+              disabled={!entry.exportable || exporting}
+              onClick={() => void exportOne()}>
+              {exporting ? <Loader2Icon className="animate-spin" /> : <DownloadIcon />}
+              {exporting ? "Exporting…" : "Export PNG"}
+            </Button>
+          ) : null}
         </div>
+        {exportError ? <p role="alert" className="text-destructive">{exportError}</p> : null}
         {mode === "slot" && entry.slotEditor && geometry && defaultGeometry ? (
           <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-2">
             <div className="dark w-28 text-foreground">

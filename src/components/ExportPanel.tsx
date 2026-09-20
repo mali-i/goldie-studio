@@ -1,8 +1,8 @@
 import { DownloadIcon, Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { zipSync } from "fflate";
-import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/button";
+import { renderExportTile } from "@/lib/exportScreenshot";
 
 /** Renders the off-screen full-resolution tiles and packages them in the browser. */
 export function ExportPanel({
@@ -29,13 +29,7 @@ export function ExportPanel({
       const files: Record<string, Uint8Array> = {};
       for (const [index, node] of nodes.entries()) {
         setLog(`Rendering ${index + 1} of ${nodes.length}…`);
-        const blob = await toBlob(node, {
-          cacheBust: true,
-          pixelRatio: 1,
-          width: node.offsetWidth,
-          height: node.offsetHeight,
-        });
-        if (!blob) throw new Error("The browser could not render a screenshot.");
+        const blob = await renderExportTile(node);
         const name = node.dataset.exportName ?? `screenshot-${index + 1}.png`;
         files[`${device}/${locale}/${name}`] = new Uint8Array(await blob.arrayBuffer());
       }
