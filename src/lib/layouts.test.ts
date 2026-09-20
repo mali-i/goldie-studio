@@ -55,4 +55,17 @@ describe("Mac landscape layouts", () => {
     expect(right!.frame.width).toBeGreaterThan(left!.frame.width);
     expect(left!.frame.top + left!.frame.height).toBeGreaterThan(MAC_TILE.height);
   });
+
+  test("screenshot pair shows two complete, separated captures beneath the copy", () => {
+    const c = compose(LAYOUTS["screenshot-pair"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
+    const [left, right] = c.devices;
+    expect(c.devices.map((device) => device.capture)).toEqual(["primary", "secondary"]);
+    expect(LAYOUTS["screenshot-pair"].capturePresentation?.objectFit).toBe("contain");
+    expect(left!.rotate).toBe(0);
+    expect(right!.rotate).toBe(0);
+    expect(left!.frame.top).toBeGreaterThan(c.copy!.box.height);
+    expect(left!.frame.left + left!.frame.width).toBeLessThan(right!.frame.left);
+    expect(left!.frame.top + left!.frame.height).toBeLessThanOrEqual(MAC_TILE.height);
+    expect(right!.frame.top + right!.frame.height).toBeLessThanOrEqual(MAC_TILE.height);
+  });
 });

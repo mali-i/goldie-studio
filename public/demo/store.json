@@ -57,7 +57,8 @@
       { "key": "minimal", "label": "Minimal", "description": "No copy, just the device.", "span": 1 },
       { "key": "gallery", "label": "Gallery", "description": "A tilted screen above left-aligned copy at the bottom.", "span": 1 },
       { "key": "side-by-side", "label": "Side by side", "description": "Two screens side by side beneath the copy.", "span": 1 },
-      { "key": "overlap-tilt", "label": "Overlapping screenshots", "description": "Two tilted, overlapping screenshot cards without device frames.", "span": 1 }
+      { "key": "overlap-tilt", "label": "Overlapping screenshots", "description": "Two tilted, overlapping screenshot cards without device frames.", "span": 1 },
+      { "key": "screenshot-pair", "label": "Screenshot pair", "description": "Two upright screenshot cards, evenly spaced and fully visible.", "span": 1 }
     ],
     "templates": [
       { "key": "uniform", "label": "Uniform", "description": "One layout throughout.", "sequence": [] },

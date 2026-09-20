@@ -18,6 +18,7 @@ export const LAYOUT_KEYS = [
   "gallery",
   "side-by-side",
   "overlap-tilt",
+  "screenshot-pair",
 ] as const;
 export type LayoutKey = (typeof LAYOUT_KEYS)[number];
 
@@ -237,6 +238,23 @@ export const LAYOUTS: Record<LayoutKey, LayoutSpec> = {
       objectPosition: "top center",
     },
   },
+  "screenshot-pair": {
+    key: "screenshot-pair",
+    label: "Screenshot pair",
+    description: "Two upright screenshot cards, evenly spaced and fully visible.",
+    span: 1,
+    copy: { position: "top", align: "center", heightRatio: 0.24 },
+    devices: [
+      { widthRatio: 0.46, x: 0.27, y: 0.63, rotate: 0, capture: "primary" },
+      { widthRatio: 0.46, x: 0.73, y: 0.63, rotate: 0, capture: "secondary" },
+    ],
+    capturePresentation: {
+      aspectRatio: 0.78,
+      cornerRadiusRatio: 0.022,
+      objectFit: "contain",
+      objectPosition: "center",
+    },
+  },
 };
 
 /**
@@ -327,6 +345,14 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
     devices: [
       { widthRatio: 0.45, x: 0.29, y: 0.72, rotate: 3, capture: "secondary" },
       { widthRatio: 0.47, x: 0.7, y: 0.73, rotate: 5, capture: "primary" },
+    ],
+  },
+  "screenshot-pair": {
+    ...LAYOUTS["screenshot-pair"],
+    copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.88 },
+    devices: [
+      { widthRatio: 0.345, x: 0.29, y: 0.64, rotate: 0, capture: "primary" },
+      { widthRatio: 0.345, x: 0.71, y: 0.64, rotate: 0, capture: "secondary" },
     ],
   },
 };
