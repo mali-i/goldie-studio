@@ -217,8 +217,8 @@ export const LAYOUTS: Record<LayoutKey, LayoutSpec> = {
     span: 1,
     copy: { position: "top", align: "center", heightRatio: 0.24 },
     devices: [
-      { widthRatio: 0.55, x: 0.26, y: 0.62, rotate: -3, capture: "primary" },
-      { widthRatio: 0.55, x: 0.74, y: 0.62, rotate: 3, capture: "secondary" },
+      { widthRatio: 0.62, x: 0.26, y: 0.62, rotate: -3, capture: "primary" },
+      { widthRatio: 0.62, x: 0.74, y: 0.62, rotate: 3, capture: "secondary" },
     ],
   },
   "overlap-tilt": {
@@ -335,9 +335,15 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
     ...LAYOUTS["side-by-side"],
     copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.8 },
     devices: [
-      { widthRatio: 0.43, x: 0.26, y: 0.72, rotate: -2, capture: "primary" },
-      { widthRatio: 0.43, x: 0.74, y: 0.72, rotate: 2, capture: "secondary" },
+      { widthRatio: 0.45, x: 0.27, y: 0.72, rotate: -2, capture: "primary" },
+      { widthRatio: 0.45, x: 0.73, y: 0.72, rotate: 2, capture: "secondary" },
     ],
+    capturePresentation: {
+      aspectRatio: 3 / 4,
+      cornerRadiusRatio: 0.022,
+      objectFit: "cover",
+      objectPosition: "center",
+    },
   },
   "overlap-tilt": {
     ...LAYOUTS["overlap-tilt"],

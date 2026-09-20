@@ -8,6 +8,7 @@ import {
   type Composition,
   compose,
   isTemplateKey,
+  LANDSCAPE_LAYOUTS,
   type LAYOUTS,
   type LayoutKey,
   type LayoutSpec,
@@ -737,6 +738,8 @@ function ScreenshotScene({
   onEdit?: (field: "headline" | "subhead", text: string) => void;
 }) {
   const c = compose(spec, tile, theme, { screenOnly, geom });
+  const capturePresentation =
+    (tile.width > tile.height ? LANDSCAPE_LAYOUTS[spec.key] : spec).capturePresentation;
   const { w, h } = cq(tile);
   // Wider-than-reference tiles compose at a narrower design width; type follows it.
   const typeScale = c.designWidth / tile.width;
@@ -817,8 +820,8 @@ function ScreenshotScene({
               key={device.capture}
               device={device}
               tile={tile}
-              frameUrl={screenOnly || spec.capturePresentation ? null : frameUrl}
-              capturePresentation={spec.capturePresentation}
+              frameUrl={screenOnly || capturePresentation ? null : frameUrl}
+              capturePresentation={capturePresentation}
               captureUrl={url}
               missing={
                 url ? undefined : `${sceneId} / Screen ${device.capture === "secondary" ? 2 : 1}`

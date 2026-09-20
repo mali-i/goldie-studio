@@ -56,6 +56,17 @@ describe("Mac landscape layouts", () => {
     expect(left!.frame.top + left!.frame.height).toBeGreaterThan(MAC_TILE.height);
   });
 
+  test("side by side uses 3:4 screenshot cards independent of the Mac frame", () => {
+    const layout = LANDSCAPE_LAYOUTS["side-by-side"];
+    const c = compose(layout, MAC_TILE, THEME, { geom: MAC_GEOMETRY });
+    expect(layout.capturePresentation?.aspectRatio).toBe(3 / 4);
+    for (const device of c.devices) {
+      expect(device.frame.width).toBe(MAC_TILE.width * 0.45);
+      expect(device.frame.width / device.frame.height).toBeCloseTo(3 / 4);
+      expect(device.screen).toMatchObject(device.frame);
+    }
+  });
+
   test("screenshot pair shows two complete, separated captures beneath the copy", () => {
     const c = compose(LAYOUTS["screenshot-pair"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
     const [left, right] = c.devices;
