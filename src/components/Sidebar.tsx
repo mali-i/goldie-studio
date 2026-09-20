@@ -199,7 +199,7 @@ export function Sidebar({
           onLocale={onLocale}
           onChanged={onAssetsChanged}
         />
-        <ProjectSettings projectId={projectId} demo={demo} onChanged={onAssetsChanged} />
+        <ProjectSettings projectId={projectId} demo={demo} locale={locale} onChanged={onAssetsChanged} />
         <ProjectScreens
           projectId={projectId}
           demo={demo}

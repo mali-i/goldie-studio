@@ -88,9 +88,16 @@ function createHandler(root: string) {
         const body = await readJson<{ device?: string }>(req);
         return sendJson(res, await addDevice(root, id, body.device));
       }
-      if (action === "locale" && req.method === "PUT") {
-        const body = await readJson<{ from?: string; to?: string }>(req);
-        return sendJson(res, await renameLocale(root, id, body.from, body.to));
+      if (action === "locale") {
+        if (req.method === "POST") {
+          const body = await readJson<{ locale?: string }>(req);
+          return sendJson(res, await addLocale(root, id, body.locale), 201);
+        }
+        if (req.method === "PUT") {
+          const body = await readJson<{ from?: string; to?: string }>(req);
+          return sendJson(res, await renameLocale(root, id, body.from, body.to));
+        }
+        return methodNotAllowed(res);
       }
       if (action === "design") {
         if (req.method === "GET") return sendJson(res, await projectDesign(root, id));
@@ -480,6 +487,15 @@ async function addDevice(root: string, id: string, device: string | undefined): 
     return touchProject(root, id, config.store.name);
   }
   return { project: await readMeta(root, id), config };
+}
+
+async function addLocale(root: string, id: string, locale: string | undefined): Promise<ProjectDetail> {
+  const next = checkedTarget(locale, "locale");
+  const config = await readConfig(root, id);
+  if (config.locales.includes(next)) throw new HttpError(409, `Locale ${next} already exists.`);
+  config.locales.push(next);
+  await writeConfig(root, id, config);
+  return touchProject(root, id, config.store.name);
 }
 
 async function renameLocale(
@@ -1015,6 +1031,7 @@ export const workspaceService = {
   createProject,
   readProject,
   addDevice,
+  addLocale,
   renameLocale,
   addScene,
   saveScreenshot,

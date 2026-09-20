@@ -9,10 +9,12 @@ import { Field } from "./Sidebar";
 export function ProjectSettings({
   projectId,
   demo,
+  locale,
   onChanged,
 }: {
   projectId: string;
   demo: boolean;
+  locale: string;
   onChanged: () => void;
 }) {
   const [config, setConfig] = useState<GoldieProjectConfig | null>(null);
@@ -25,7 +27,6 @@ export function ProjectSettings({
   }, [demo, projectId]);
 
   if (demo || !config) return null;
-  const locale = config.locales[0] ?? "en-US";
   const updateStore = <K extends keyof GoldieProjectConfig["store"]>(
     key: K,
     value: GoldieProjectConfig["store"][K],

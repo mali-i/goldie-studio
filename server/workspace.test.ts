@@ -10,6 +10,29 @@ afterEach(async () => {
 });
 
 describe("workspace projects", () => {
+  test("adds a locale without replacing existing localized content", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Two locales");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "iphone-6.9", locale: "en-US", sceneId: "scene-1",
+      mimeType: "image/png", base64: png,
+    });
+
+    await workspaceService.addLocale(root, project.project.id, "zh-Hans");
+    const saved = await workspaceService.readProject(root, project.project.id);
+    expect(saved.config.locales).toEqual(["en-US", "zh-Hans"]);
+    expect(saved.config.scenes[0]?.sources["iphone-6.9"]?.["en-US"]?.primary)
+      .toBe("screenshots/iphone-6.9/en-US/scene-1/primary.png");
+    expect(saved.config.scenes[0]?.sources["iphone-6.9"]?.["zh-Hans"]).toBeUndefined();
+    const manifest = await workspaceService.projectManifest(root, project.project.id);
+    expect(manifest.design.capturesByLocale["iphone-6.9"]?.["en-US"]?.screenshots).toHaveLength(1);
+    expect(manifest.design.capturesByLocale["iphone-6.9"]?.["zh-Hans"]?.screenshots).toHaveLength(0);
+    expect(workspaceService.addLocale(root, project.project.id, "zh-Hans"))
+      .rejects.toThrow("already exists");
+  });
+
   test("renames a locale without hiding its screenshots, copy, or layout settings", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);
