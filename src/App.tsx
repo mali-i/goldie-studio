@@ -222,6 +222,10 @@ function Loaded({
   const [dark, setDark] = useState(
     new URLSearchParams(window.location.search).get("dark") === "1" || view.dark === true,
   );
+  const selectLocale = (next: string) => {
+    setLocale(next);
+    storeView(manifest.app.name, { platform, device, locale: next, dark });
+  };
   const knownLayout = (key: string | undefined) =>
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
   const { state, set } = useHistory<DesignState>(() => ({
@@ -415,7 +419,7 @@ function Loaded({
         dark={dark}
         onPlatform={selectPlatform}
         onDevice={setDevice}
-        onLocale={setLocale}
+        onLocale={selectLocale}
         onDark={setDark}
         background={background}
         frame={frame}

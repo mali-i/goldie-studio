@@ -60,9 +60,6 @@ export function ProjectSettings({
             onChange={(e) => updateStore("subtitle", { ...config.store.subtitle, [locale]: e.target.value })}
           />
         </Field>
-        <Field label="Locale">
-          <Input value={locale} onChange={(e) => setConfig({ ...config, locales: [e.target.value] })} />
-        </Field>
         <Button size="sm" onClick={() => void save()} disabled={busy}>
           {busy ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
           Save settings

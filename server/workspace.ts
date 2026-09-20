@@ -88,6 +88,10 @@ function createHandler(root: string) {
         const body = await readJson<{ device?: string }>(req);
         return sendJson(res, await addDevice(root, id, body.device));
       }
+      if (action === "locale" && req.method === "PUT") {
+        const body = await readJson<{ from?: string; to?: string }>(req);
+        return sendJson(res, await renameLocale(root, id, body.from, body.to));
+      }
       if (action === "design") {
         if (req.method === "GET") return sendJson(res, await projectDesign(root, id));
         if (req.method === "PUT") {
@@ -476,6 +480,85 @@ async function addDevice(root: string, id: string, device: string | undefined): 
     return touchProject(root, id, config.store.name);
   }
   return { project: await readMeta(root, id), config };
+}
+
+async function renameLocale(
+  root: string,
+  id: string,
+  from: string | undefined,
+  to: string | undefined,
+): Promise<ProjectDetail> {
+  const oldLocale = checkedTarget(from, "locale");
+  const newLocale = checkedTarget(to, "locale");
+  const config = await readConfig(root, id);
+  const index = config.locales.indexOf(oldLocale);
+  if (index < 0) throw new HttpError(404, `Locale ${oldLocale} does not exist.`);
+  if (oldLocale === newLocale) return { project: await readMeta(root, id), config };
+  if (config.locales.includes(newLocale)) throw new HttpError(409, `Locale ${newLocale} already exists.`);
+
+  const moveKey = <T>(values: Record<string, T> | undefined) => {
+    if (values && Object.hasOwn(values, oldLocale)) {
+      values[newLocale] = values[oldLocale]!;
+      delete values[oldLocale];
+    }
+  };
+  const devices = new Set([
+    ...config.devices,
+    ...config.scenes.flatMap((scene) => Object.keys(scene.sources ?? {})),
+  ]);
+  const directoryMoves: Array<{ from: string; to: string }> = [];
+  for (const device of devices) {
+    const oldDir = safeProjectPath(root, id, `screenshots/${device}/${oldLocale}`);
+    const newDir = safeProjectPath(root, id, `screenshots/${device}/${newLocale}`);
+    if (!(await stat(oldDir).catch(() => null))) continue;
+    if (await stat(newDir).catch(() => null)) {
+      throw new HttpError(409, `Screenshots already exist for ${newLocale} on ${device}.`);
+    }
+    directoryMoves.push({ from: oldDir, to: newDir });
+  }
+
+  config.locales[index] = newLocale;
+  moveKey(config.store.subtitle);
+  moveKey(config.store.description);
+  for (const decoration of config.theme.decorations ?? []) {
+    if (decoration.kind === "badge") moveKey(decoration.text);
+  }
+  for (const scene of config.scenes) {
+    moveKey(scene.headline);
+    moveKey(scene.subhead);
+    for (const decoration of scene.decorations ?? []) {
+      if (decoration.kind === "badge") moveKey(decoration.text);
+    }
+    for (const [device, locales] of Object.entries(scene.sources ?? {})) {
+      const slots = locales[oldLocale];
+      if (!slots) continue;
+      if (locales[newLocale]) throw new HttpError(409, `Screenshots already exist for ${newLocale} on ${device}.`);
+      locales[newLocale] = Object.fromEntries(
+        Object.entries(slots).map(([slot, path]) => [
+          slot,
+          path?.startsWith(`screenshots/${device}/${oldLocale}/`)
+            ? `screenshots/${device}/${newLocale}/${path.slice(`screenshots/${device}/${oldLocale}/`.length)}`
+            : path,
+        ]),
+      );
+      delete locales[oldLocale];
+    }
+    for (const locales of Object.values(scene.capturePositions ?? {})) moveKey(locales);
+    for (const locales of Object.values(scene.slotGeometries ?? {})) moveKey(locales);
+  }
+
+  const moved: typeof directoryMoves = [];
+  try {
+    for (const paths of directoryMoves) {
+      await rename(paths.from, paths.to);
+      moved.push(paths);
+    }
+    await writeConfig(root, id, config);
+  } catch (error) {
+    for (const paths of moved.reverse()) await rename(paths.to, paths.from);
+    throw error;
+  }
+  return touchProject(root, id, config.store.name);
 }
 
 async function saveScreenshot(
@@ -932,6 +1015,7 @@ export const workspaceService = {
   createProject,
   readProject,
   addDevice,
+  renameLocale,
   addScene,
   saveScreenshot,
   deleteScreenshot,

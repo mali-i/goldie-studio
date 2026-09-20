@@ -26,6 +26,12 @@ export const projectApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device }),
     }),
+  renameLocale: (id: string, from: string, to: string) =>
+    json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/locale`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    }),
   addScene: (id: string) =>
     json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/scenes`, {
       method: "POST",

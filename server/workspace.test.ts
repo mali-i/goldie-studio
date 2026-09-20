@@ -10,6 +10,43 @@ afterEach(async () => {
 });
 
 describe("workspace projects", () => {
+  test("renames a locale without hiding its screenshots, copy, or layout settings", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Locale rename");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "iphone-6.9", locale: "en-US", sceneId: "scene-1",
+      headline: "Welcome", subhead: "Keep going", mimeType: "image/png", base64: png,
+    });
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "mac-2880x1800", locale: "en-US", sceneId: "scene-1",
+      mimeType: "image/png", base64: png,
+    });
+    await workspaceService.applyDesign(root, project.project.id, {
+      capturePositions: { "scene-1": { "iphone-6.9": { "en-US": { primary: { x: 0.25, y: 0.75 } } } } },
+    });
+
+    await workspaceService.renameLocale(root, project.project.id, "en-US", "zh-Hans");
+    const saved = await workspaceService.readProject(root, project.project.id);
+    expect(saved.config.locales).toEqual(["zh-Hans"]);
+    expect(saved.config.store.subtitle["zh-Hans"]).toBe("A better way to get things done");
+    expect(saved.config.scenes[0]?.headline["zh-Hans"]).toBe("Welcome");
+    expect(saved.config.scenes[0]?.subhead?.["zh-Hans"]).toBe("Keep going");
+    expect(saved.config.scenes[0]?.capturePositions?.["iphone-6.9"]?.["zh-Hans"]?.primary)
+      .toEqual({ x: 0.25, y: 0.75 });
+    const manifest = await workspaceService.projectManifest(root, project.project.id);
+    expect(manifest.design.capturesByLocale["iphone-6.9"]?.["zh-Hans"]?.screenshots)
+      .toEqual([expect.objectContaining({ sceneId: "scene-1" })]);
+    expect(manifest.design.capturesByLocale["mac-2880x1800"]?.["zh-Hans"]?.screenshots)
+      .toEqual([expect.objectContaining({ sceneId: "scene-1" })]);
+    const source = saved.config.scenes[0]?.sources["iphone-6.9"]?.["zh-Hans"]?.primary;
+    expect(source).toBe("screenshots/iphone-6.9/zh-Hans/scene-1/primary.png");
+    expect(await readFile(join(root, project.project.id, source!), "base64")).toBe(png);
+    expect(workspaceService.renameLocale(root, project.project.id, "zh-Hans", "../bad"))
+      .rejects.toThrow("Invalid locale");
+  });
+
   test("adds device targets without replacing existing screenshots", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);

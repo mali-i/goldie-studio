@@ -25,6 +25,7 @@ import type { SceneCopy, StoreManifest } from "../manifest";
 import type { ProjectSummary } from "../project";
 import { DesignPanel } from "./DesignPanel";
 import { ExportPanel } from "./ExportPanel";
+import { LocaleSettings } from "./LocaleSettings";
 import { ProjectScreens } from "./ProjectScreens";
 import { ProjectSettings } from "./ProjectSettings";
 
@@ -176,31 +177,28 @@ export function Sidebar({
             </RadioGroupPrimitive.Root>
           </Field>
         </div>
-        {platformDevices.length > 1 || manifest.locales.length > 1 ? (
-          <div className="flex flex-col gap-4 p-5">
-            {platformDevices.length > 1 ? (
-              <Field label="Device">
-                <Select
-                  value={device}
-                  onChange={onDevice}
-                  options={platformDevices.map((d) => [
-                    d.key,
-                    d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label,
-                  ])}
-                />
-              </Field>
-            ) : null}
-            {manifest.locales.length > 1 ? (
-              <Field label="Locale">
-                <Select
-                  value={locale}
-                  onChange={onLocale}
-                  options={manifest.locales.map((l) => [l, l])}
-                />
-              </Field>
-            ) : null}
+        {platformDevices.length > 1 ? (
+          <div className="px-5 pt-4">
+            <Field label="Device">
+              <Select
+                value={device}
+                onChange={onDevice}
+                options={platformDevices.map((d) => [
+                  d.key,
+                  d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label,
+                ])}
+              />
+            </Field>
           </div>
         ) : null}
+        <LocaleSettings
+          projectId={projectId}
+          demo={demo}
+          locales={manifest.locales}
+          locale={locale}
+          onLocale={onLocale}
+          onChanged={onAssetsChanged}
+        />
         <ProjectSettings projectId={projectId} demo={demo} onChanged={onAssetsChanged} />
         <ProjectScreens
           projectId={projectId}
