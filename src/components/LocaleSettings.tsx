@@ -1,4 +1,4 @@
-import { Loader2Icon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
+import { Loader2Icon, PencilIcon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export function LocaleSettings({
   const [draft, setDraft] = useState(locale);
   const [newDraft, setNewDraft] = useState("");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export function LocaleSettings({
     try {
       await projectApi.renameLocale(projectId, locale, next);
       onLocale(next);
+      setEditing(false);
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -77,15 +79,34 @@ export function LocaleSettings({
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium text-muted-foreground">Locale</Label>
           {!demo ? (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={adding ? "Cancel adding locale" : "Add locale"}
-              onClick={() => { setAdding(!adding); setNewDraft(""); setError(null); }}
-              disabled={busy}
-            >
-              {adding ? <XIcon /> : <PlusIcon />}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={editing ? "Close locale editor" : "Edit selected locale"}
+                aria-expanded={editing}
+                className={editing ? "bg-muted text-foreground" : undefined}
+                onClick={() => {
+                  setEditing(!editing);
+                  setAdding(false);
+                  setDraft(locale);
+                  setError(null);
+                }}
+                disabled={busy}
+              >
+                <PencilIcon className="size-3.5" />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={adding ? "Cancel adding locale" : "Add locale"}
+                aria-expanded={adding}
+                onClick={() => { setAdding(!adding); setEditing(false); setNewDraft(""); setError(null); }}
+                disabled={busy}
+              >
+                {adding ? <XIcon /> : <PlusIcon />}
+              </Button>
+            </div>
           ) : null}
         </div>
         <RadioGroupPrimitive.Root
@@ -121,26 +142,25 @@ export function LocaleSettings({
               Add
             </Button>
           </div>
-        ) : (
+        ) : editing ? (
           <div className="mt-2 flex flex-col gap-1.5">
             <Label htmlFor="locale-code" className="text-[11px] text-muted-foreground">Edit selected locale</Label>
             <div className="flex gap-2">
               <Input
                 id="locale-code"
+                autoFocus
                 value={draft}
                 onChange={(event) => { setDraft(event.target.value); setError(null); }}
                 onKeyDown={(event) => { if (event.key === "Enter") void save(); }}
-                disabled={demo || busy}
+                disabled={busy}
               />
-              {!demo ? (
-                <Button size="sm" variant="outline" onClick={() => void save()} disabled={busy || draft.trim() === locale}>
-                  {busy ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-                  Save
-                </Button>
-              ) : null}
+              <Button size="sm" variant="outline" onClick={() => void save()} disabled={busy || draft.trim() === locale}>
+                {busy ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+                Save
+              </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
       {error ? <p className="mt-2 text-[11px] text-destructive">{error}</p> : null}
     </div>
