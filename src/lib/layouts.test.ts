@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compose, LANDSCAPE_LAYOUTS, LANDSCAPE_TYPE, LAYOUT_KEYS } from "./layouts";
+import { compose, LANDSCAPE_LAYOUTS, LANDSCAPE_TYPE, LAYOUT_KEYS, LAYOUTS } from "./layouts";
 
 const MAC_TILE = { width: 2880, height: 1800 };
 const MAC_GEOMETRY = {
@@ -27,7 +27,10 @@ describe("Mac landscape layouts", () => {
         expect(Number.isFinite(device.frame.top)).toBe(true);
         expect(device.frame.width).toBeGreaterThan(0);
         expect(device.frame.height).toBeGreaterThan(0);
-        expect(device.screen.width / device.screen.height).toBeCloseTo(2720 / 1766, 5);
+        expect(device.screen.width / device.screen.height).toBeCloseTo(
+          layout.capturePresentation?.aspectRatio ?? 2720 / 1766,
+          5,
+        );
       }
     }
   });
@@ -40,5 +43,16 @@ describe("Mac landscape layouts", () => {
     expect(
       (mac.devices[0]?.frame.top ?? 0) + (mac.devices[0]?.frame.height ?? 0),
     ).toBeLessThanOrEqual(MAC_TILE.height);
+  });
+
+  test("overlapping screenshots keep both captures below copy with the second in front", () => {
+    const c = compose(LAYOUTS["overlap-tilt"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
+    const [left, right] = c.devices;
+    expect(c.devices.map((device) => device.capture)).toEqual(["secondary", "primary"]);
+    expect(left!.frame.top).toBeGreaterThan(c.copy!.box.height);
+    expect(right!.frame.top).toBeGreaterThan(c.copy!.box.height);
+    expect(left!.frame.left + left!.frame.width).toBeGreaterThan(right!.frame.left);
+    expect(right!.frame.width).toBeGreaterThan(left!.frame.width);
+    expect(left!.frame.top + left!.frame.height).toBeGreaterThan(MAC_TILE.height);
   });
 });

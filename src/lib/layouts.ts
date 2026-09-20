@@ -17,6 +17,7 @@ export const LAYOUT_KEYS = [
   "minimal",
   "gallery",
   "side-by-side",
+  "overlap-tilt",
 ] as const;
 export type LayoutKey = (typeof LAYOUT_KEYS)[number];
 
@@ -43,6 +44,13 @@ export type LayoutSpec = {
     widthRatio?: number;
   };
   devices: DevicePlacement[];
+  /** Render the uploaded image as a tall screenshot card instead of inside device art. */
+  capturePresentation?: {
+    aspectRatio: number;
+    cornerRadiusRatio: number;
+    objectFit: "cover" | "contain";
+    objectPosition: string;
+  };
 };
 
 export const TYPE = {
@@ -212,6 +220,23 @@ export const LAYOUTS: Record<LayoutKey, LayoutSpec> = {
       { widthRatio: 0.55, x: 0.74, y: 0.62, rotate: 3, capture: "secondary" },
     ],
   },
+  "overlap-tilt": {
+    key: "overlap-tilt",
+    label: "Overlapping screenshots",
+    description: "Two tilted, overlapping screenshot cards without device frames.",
+    span: 1,
+    copy: { position: "top", align: "center", heightRatio: 0.24 },
+    devices: [
+      { widthRatio: 0.72, x: 0.39, y: 0.66, rotate: -3, capture: "secondary" },
+      { widthRatio: 0.74, x: 0.62, y: 0.72, rotate: 4, capture: "primary" },
+    ],
+    capturePresentation: {
+      aspectRatio: 0.78,
+      cornerRadiusRatio: 0.022,
+      objectFit: "cover",
+      objectPosition: "top center",
+    },
+  },
 };
 
 /**
@@ -294,6 +319,14 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
     devices: [
       { widthRatio: 0.43, x: 0.26, y: 0.72, rotate: -2, capture: "primary" },
       { widthRatio: 0.43, x: 0.74, y: 0.72, rotate: 2, capture: "secondary" },
+    ],
+  },
+  "overlap-tilt": {
+    ...LAYOUTS["overlap-tilt"],
+    copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.88 },
+    devices: [
+      { widthRatio: 0.45, x: 0.29, y: 0.72, rotate: 3, capture: "secondary" },
+      { widthRatio: 0.47, x: 0.7, y: 0.73, rotate: 5, capture: "primary" },
     ],
   },
 };
@@ -426,9 +459,17 @@ export function compose(
   theme: { copyHeightRatio: number; deviceWidthRatio: number },
   opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
 ): Composition {
-  const geom = opts.geom ?? FRAME;
   const landscape = tileIn.width > tileIn.height;
   const resolvedSpec = landscape ? LANDSCAPE_LAYOUTS[spec.key] : spec;
+  const capture = resolvedSpec.capturePresentation;
+  const geom = capture
+    ? {
+        width: 1000,
+        height: 1000 / capture.aspectRatio,
+        screen: { x: 0, y: 0, width: 1000, height: 1000 / capture.aspectRatio },
+        screenRadius: 1000 * capture.cornerRadiusRatio,
+      }
+    : (opts.geom ?? FRAME);
   const type = landscape ? LANDSCAPE_TYPE : TYPE;
   // Keep wider portrait store sizes aligned to the iPhone reference, but let
   // landscape targets such as Mac use their full canvas width.

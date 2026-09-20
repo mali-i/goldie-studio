@@ -10,6 +10,7 @@ import {
   isTemplateKey,
   type LAYOUTS,
   type LayoutKey,
+  type LayoutSpec,
   resolveScenes,
   SCREEN_SHADOW,
 } from "../lib/layouts";
@@ -816,7 +817,8 @@ function ScreenshotScene({
               key={device.capture}
               device={device}
               tile={tile}
-              frameUrl={screenOnly ? null : frameUrl}
+              frameUrl={screenOnly || spec.capturePresentation ? null : frameUrl}
+              capturePresentation={spec.capturePresentation}
               captureUrl={url}
               missing={
                 url ? undefined : `${sceneId} / Screen ${device.capture === "secondary" ? 2 : 1}`
@@ -830,20 +832,22 @@ function ScreenshotScene({
 }
 
 /**
- * One device: the capture cover-fitted inside the rounded screen, the bezel
- * over it, or a drop shadow under the bare screen when there is no bezel.
+ * One device or unframed screenshot card. The capture and its shadow share
+ * the same computed geometry used by the preview and full-resolution export.
  * The box rotates about its centre, matching the canvas transform.
  */
 function DeviceView({
   device,
   tile,
   frameUrl,
+  capturePresentation,
   captureUrl,
   missing,
 }: {
   device: Composition["devices"][number];
   tile: { width: number; height: number };
   frameUrl: string | null;
+  capturePresentation: LayoutSpec["capturePresentation"];
   captureUrl: string | undefined;
   /** Scene id to name in the placeholder when the capture is missing. */
   missing: string | undefined;
@@ -872,10 +876,13 @@ function DeviceView({
           height: pct(screen.height, frame.height),
           borderRadius: w(screen.radius),
           overflow: "hidden",
-          background: "#000",
-          boxShadow: frameUrl
-            ? undefined
-            : `0 ${w(tile.width * SCREEN_SHADOW.offsetY)} ${w(tile.width * SCREEN_SHADOW.blur)} ${SCREEN_SHADOW.color}`,
+          background: capturePresentation ? "#fff" : "#000",
+          border: capturePresentation ? `${w(tile.width * 0.0008)} solid rgba(144, 162, 195, 0.24)` : undefined,
+          boxShadow: capturePresentation
+            ? `0 ${w(tile.width * 0.018)} ${w(tile.width * 0.05)} rgba(18, 30, 66, 0.2)`
+            : frameUrl
+              ? undefined
+              : `0 ${w(tile.width * SCREEN_SHADOW.offsetY)} ${w(tile.width * SCREEN_SHADOW.blur)} ${SCREEN_SHADOW.color}`,
         }}
       >
         {captureUrl ? (
@@ -883,11 +890,17 @@ function DeviceView({
             src={`/${captureUrl}`}
             alt=""
             draggable={false}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: capturePresentation?.objectFit ?? "cover",
+              objectPosition: capturePresentation?.objectPosition ?? "center",
+              display: "block",
+            }}
           />
         ) : (
           <div
-            className="grid h-full w-full place-items-center border-4 border-dashed border-neutral-500 bg-neutral-800 text-center text-neutral-300"
+            className={`grid h-full w-full place-items-center border-4 border-dashed text-center ${capturePresentation ? "border-slate-300 bg-white text-slate-500" : "border-neutral-500 bg-neutral-800 text-neutral-300"}`}
             style={{ fontSize: "3cqw", padding: "4cqw" }}
           >
             no capture for {missing}
