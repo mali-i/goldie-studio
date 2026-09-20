@@ -11,7 +11,7 @@ const MAC_GEOMETRY = {
 const THEME = { copyHeightRatio: 0.24, deviceWidthRatio: 0.84 };
 
 describe("Mac landscape layouts", () => {
-  test("provides a dedicated composition for all eleven layouts", () => {
+  test("provides a dedicated composition for every layout", () => {
     expect(Object.keys(LANDSCAPE_LAYOUTS)).toEqual([...LAYOUT_KEYS]);
 
     for (const key of LAYOUT_KEYS) {

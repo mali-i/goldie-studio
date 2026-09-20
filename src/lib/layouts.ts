@@ -15,6 +15,8 @@ export const LAYOUT_KEYS = [
   "panorama",
   "panorama-duo",
   "minimal",
+  "gallery",
+  "side-by-side",
 ] as const;
 export type LayoutKey = (typeof LAYOUT_KEYS)[number];
 
@@ -191,10 +193,29 @@ export const LAYOUTS: Record<LayoutKey, LayoutSpec> = {
     copy: { position: "none", align: "center" },
     devices: single({ widthRatio: 0.92, x: 0.5, y: 0.5 }),
   },
+  gallery: {
+    key: "gallery",
+    label: "Gallery",
+    description: "A tilted screen above left-aligned copy at the bottom.",
+    span: 1,
+    copy: { position: "bottom", align: "left", heightRatio: 0.24, widthRatio: 0.82 },
+    devices: single({ widthRatio: 0.7, x: 0.62, y: 0.38, rotate: 6 }),
+  },
+  "side-by-side": {
+    key: "side-by-side",
+    label: "Side by side",
+    description: "Two screens side by side beneath the copy.",
+    span: 1,
+    copy: { position: "top", align: "center", heightRatio: 0.24 },
+    devices: [
+      { widthRatio: 0.55, x: 0.26, y: 0.62, rotate: -3, capture: "primary" },
+      { widthRatio: 0.55, x: 0.74, y: 0.62, rotate: 3, capture: "secondary" },
+    ],
+  },
 };
 
 /**
- * The same eleven layout concepts re-composed for a wide Mac canvas. Device
+ * The same layout concepts re-composed for a wide Mac canvas. Device
  * widths are fractions of one 2880px tile; panorama coordinates still span
  * two tiles, matching the portrait layout contract.
  */
@@ -261,6 +282,19 @@ export const LANDSCAPE_LAYOUTS: Record<LayoutKey, LayoutSpec> = {
   minimal: {
     ...LAYOUTS.minimal,
     devices: single({ widthRatio: 0.8, x: 0.5, y: 0.5 }),
+  },
+  gallery: {
+    ...LAYOUTS.gallery,
+    copy: { position: "bottom", align: "left", heightRatio: 0.26, widthRatio: 0.55 },
+    devices: single({ widthRatio: 0.48, x: 0.64, y: 0.35, rotate: 3 }),
+  },
+  "side-by-side": {
+    ...LAYOUTS["side-by-side"],
+    copy: { position: "top", align: "center", heightRatio: 0.24, widthRatio: 0.8 },
+    devices: [
+      { widthRatio: 0.43, x: 0.26, y: 0.72, rotate: -2, capture: "primary" },
+      { widthRatio: 0.43, x: 0.74, y: 0.72, rotate: 2, capture: "secondary" },
+    ],
   },
 };
 

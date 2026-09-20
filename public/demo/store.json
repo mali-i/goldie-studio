@@ -54,7 +54,9 @@
       { "key": "duo-tilt", "label": "Duo tilt", "description": "Two tilted screens stepping diagonally.", "span": 1 },
       { "key": "panorama", "label": "Panorama", "description": "One device crossing a two-tile seam.", "span": 2 },
       { "key": "panorama-duo", "label": "Panorama duo", "description": "Two screens sharing a panorama.", "span": 2 },
-      { "key": "minimal", "label": "Minimal", "description": "No copy, just the device.", "span": 1 }
+      { "key": "minimal", "label": "Minimal", "description": "No copy, just the device.", "span": 1 },
+      { "key": "gallery", "label": "Gallery", "description": "A tilted screen above left-aligned copy at the bottom.", "span": 1 },
+      { "key": "side-by-side", "label": "Side by side", "description": "Two screens side by side beneath the copy.", "span": 1 }
     ],
     "templates": [
       { "key": "uniform", "label": "Uniform", "description": "One layout throughout.", "sequence": [] },
