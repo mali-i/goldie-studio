@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Platform } from "../App";
-import type { StoreManifest } from "../manifest";
+import type { SceneCopy, StoreManifest } from "../manifest";
 import type { ProjectSummary } from "../project";
 import { DesignPanel } from "./DesignPanel";
 import { ExportPanel } from "./ExportPanel";
@@ -70,9 +70,12 @@ export function Sidebar({
   frame,
   fontFamily,
   template,
+  sceneTemplate,
   layout,
   screenOnly,
   sceneOrder,
+  sceneLayouts,
+  sceneCopy,
   onBackground,
   onFrame,
   onFontFamily,
@@ -100,9 +103,12 @@ export function Sidebar({
   frame: string;
   fontFamily: string;
   template: string;
+  sceneTemplate: string | string[];
   layout: string;
   screenOnly: boolean;
   sceneOrder: string[];
+  sceneLayouts: Record<string, string>;
+  sceneCopy: Record<string, SceneCopy>;
   onBackground: (v: string) => void;
   onFrame: (v: string) => void;
   onFontFamily: (v: string) => void;
@@ -213,6 +219,10 @@ export function Sidebar({
           scenes={manifest.design.scenes}
           captures={manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device]}
           order={sceneOrder}
+          copy={sceneCopy}
+          template={sceneTemplate}
+          layout={layout}
+          sceneLayouts={sceneLayouts}
           onReorder={onSceneReorder}
           onChanged={onAssetsChanged}
         />

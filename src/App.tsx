@@ -346,9 +346,16 @@ function Loaded({
         frame={frame}
         fontFamily={fontFamily}
         template={template}
+        sceneTemplate={
+          template === CUSTOM_TEMPLATE && Array.isArray(design.template)
+            ? design.template
+            : template
+        }
         layout={layout}
         screenOnly={screenOnly}
         sceneOrder={order}
+        sceneLayouts={sceneLayouts}
+        sceneCopy={copy}
         onBackground={setBackground}
         onFrame={setFrame}
         onFontFamily={setFontFamily}

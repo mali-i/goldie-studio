@@ -1,4 +1,5 @@
 import {
+  CheckIcon,
   GripVerticalIcon,
   ImagePlusIcon,
   Loader2Icon,
@@ -7,7 +8,8 @@ import {
 } from "lucide-react";
 import { Reorder } from "motion/react";
 import { useRef, useState } from "react";
-import type { DesignScene, DeviceCaptures } from "../manifest";
+import { isTemplateKey, resolveScenes, type LayoutKey } from "../lib/layouts";
+import type { DesignScene, DeviceCaptures, SceneCopy } from "../manifest";
 import type { ScreenshotSlot } from "../project";
 import { projectApi } from "../project-api";
 import { Button } from "./ui/button";
@@ -20,6 +22,10 @@ export function ProjectScreens({
   scenes,
   captures,
   order,
+  copy,
+  template,
+  layout,
+  sceneLayouts,
   onReorder,
   onChanged,
 }: {
@@ -30,6 +36,10 @@ export function ProjectScreens({
   scenes: DesignScene[];
   captures: DeviceCaptures | undefined;
   order: string[];
+  copy: Record<string, SceneCopy>;
+  template: string | string[];
+  layout: string;
+  sceneLayouts: Record<string, string>;
   onReorder: (order: string[]) => void;
   onChanged: () => void;
 }) {
@@ -46,9 +56,28 @@ export function ProjectScreens({
       (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
   );
   const sceneIds = orderedScenes.map((scene) => scene.id);
+  const resolved = resolveScenes(orderedScenes, {
+    template: Array.isArray(template)
+      ? (template as LayoutKey[])
+      : isTemplateKey(template)
+        ? template
+        : undefined,
+    layout,
+    sceneLayouts,
+  });
+  const needsSecondScreen = new Map(
+    resolved.map(({ scene, layout: spec }) => [
+      scene.id,
+      spec.devices.some((placement) => placement.capture === "secondary"),
+    ]),
+  );
+  const slotsFor = (sceneId: string): ScreenshotSlot[] =>
+    needsSecondScreen.get(sceneId) ? ["primary", "secondary"] : ["primary"];
   const available = new Set(
     (captures?.screenshots ?? []).map((shot) => `${shot.sceneId}:${shot.slot ?? "primary"}`),
   );
+  const headlineOf = (scene: DesignScene) =>
+    copy[scene.id]?.headline?.[locale] ?? scene.headline[locale] ?? scene.id;
 
   const chooseFile = (sceneId: string, slot: ScreenshotSlot) => {
     uploadTarget.current = { sceneId, slot };
@@ -68,7 +97,7 @@ export function ProjectScreens({
         locale,
         sceneId: target.sceneId,
         slot: target.slot,
-        headline: scene?.headline[locale],
+        headline: scene ? headlineOf(scene) : undefined,
         subhead: scene?.subhead?.[locale],
         mimeType: file.type,
         base64: await fileBase64(file),
@@ -136,28 +165,39 @@ export function ProjectScreens({
             <div className="flex items-center gap-1.5">
               <GripVerticalIcon className="size-3.5 shrink-0 cursor-grab text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs">
-                {index + 1}. {scene.headline[locale] ?? scene.id}
+                {index + 1}. {headlineOf(scene)}
               </span>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {(["primary", "secondary"] as const).map((slot, slotIndex) => {
+            <div
+              className={`mt-2 grid gap-1.5 ${needsSecondScreen.get(scene.id) ? "grid-cols-2" : "grid-cols-1"}`}
+            >
+              {slotsFor(scene.id).map((slot, slotIndex) => {
                 const hasScreen = available.has(`${scene.id}:${slot}`);
                 return (
                   <div
                     key={slot}
-                    className="flex min-w-0 items-center rounded-md border border-border bg-background/60"
+                    className={`flex min-w-0 items-center overflow-hidden rounded-lg border transition-colors ${
+                      hasScreen
+                        ? "border-border bg-background/80"
+                        : "border-dashed border-border bg-background/50 hover:border-foreground/40 hover:bg-background"
+                    }`}
                   >
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => chooseFile(scene.id, slot)}
-                      className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1.5 text-[11px] disabled:opacity-50"
+                      aria-label={`${hasScreen ? "Replace" : "Upload"} screen ${slotIndex + 1} for ${headlineOf(scene)}`}
+                      className="flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50"
                     >
-                      <ImagePlusIcon className="size-3 shrink-0" />
-                      <span className="truncate">
-                        Screen {slotIndex + 1}
-                        {hasScreen ? " ✓" : " +"}
-                      </span>
+                      {hasScreen ? (
+                        <CheckIcon className="size-3.5 shrink-0 text-emerald-600" />
+                      ) : (
+                        <ImagePlusIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">Screen {slotIndex + 1}</span>
+                      {!hasScreen ? (
+                        <PlusIcon className="size-3 shrink-0 text-muted-foreground" />
+                      ) : null}
                     </button>
                     {hasScreen ? (
                       <button
@@ -165,7 +205,7 @@ export function ProjectScreens({
                         disabled={busy}
                         aria-label={`Remove screen ${slotIndex + 1} from ${scene.id}`}
                         onClick={() => void remove(scene.id, slot)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        className="flex min-h-8 items-center border-l border-border px-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50"
                       >
                         <Trash2Icon className="size-3" />
                       </button>

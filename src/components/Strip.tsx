@@ -966,9 +966,9 @@ function Decorations({
 }
 
 /**
- * Props that make a copy element editable in place. The text is committed
- * on blur or Enter (Shift+Enter keeps a line break, as the export honours
- * newlines); Escape restores the current value and leaves the field.
+ * Props that make a copy element editable in place. Input is reported live
+ * so other views can mirror it; Enter finishes (Shift+Enter keeps a line
+ * break), and Escape restores the value from when editing began.
  */
 function editableProps(commit: (text: string) => void, current: string, label: string) {
   return {
@@ -979,9 +979,17 @@ function editableProps(commit: (text: string) => void, current: string, label: s
     "data-placeholder": label,
     spellCheck: false,
     className: "editable-copy",
+    onFocus: (e: React.FocusEvent<HTMLElement>) => {
+      e.currentTarget.dataset.editStart = current;
+    },
+    onInput: (e: React.FormEvent<HTMLElement>) => {
+      const text = e.currentTarget.innerText.replace(/\n+$/, "");
+      if (text !== current) commit(text);
+    },
     onBlur: (e: React.FocusEvent<HTMLElement>) => {
       const text = e.currentTarget.innerText.replace(/\n+$/, "");
       if (text !== current) commit(text);
+      delete e.currentTarget.dataset.editStart;
     },
     onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -989,7 +997,9 @@ function editableProps(commit: (text: string) => void, current: string, label: s
         e.currentTarget.blur();
       } else if (e.key === "Escape") {
         e.preventDefault();
-        e.currentTarget.innerText = current;
+        const original = e.currentTarget.dataset.editStart ?? current;
+        e.currentTarget.innerText = original;
+        commit(original);
         e.currentTarget.blur();
       }
     },
