@@ -22,6 +22,8 @@ import {
   loadManifest,
   type SavedDesign,
   type SceneCopy,
+  type SlotGeometries,
+  type SlotGeometry,
   type StoreManifest,
   saveDesign,
 } from "./manifest";
@@ -224,11 +226,12 @@ function Loaded({
     screenOnly: saved.screenOnly ?? design.screenOnly,
     sceneLayouts: initialSceneLayouts(design, saved, knownLayout),
     capturePositions: saved.capturePositions ?? {},
+    slotGeometries: saved.slotGeometries ?? {},
     order: initialOrder(design, saved),
   }));
   const {
     background, frame, fontFamily, copy, layout, template, screenOnly,
-    sceneLayouts, capturePositions, order,
+    sceneLayouts, capturePositions, slotGeometries, order,
   } = state;
   // Each setter names its field so a burst of edits to one control (a drag
   // on the gradient picker) collapses into a single undo step.
@@ -277,6 +280,37 @@ function Loaded({
         },
       },
     }));
+  const setSlotGeometry = (
+    sceneId: string,
+    deviceKey: string,
+    localeKey: string,
+    layoutKey: string,
+    slot: "primary" | "secondary",
+    geometry: SlotGeometry | undefined,
+  ) =>
+    set(`slot:${sceneId}:${deviceKey}:${localeKey}:${layoutKey}:${slot}`, (prev) => {
+      const slots = {
+        ...prev.slotGeometries[sceneId]?.[deviceKey]?.[localeKey]?.[layoutKey],
+      };
+      if (geometry) slots[slot] = geometry;
+      else delete slots[slot];
+      return {
+        ...prev,
+        slotGeometries: {
+          ...prev.slotGeometries,
+          [sceneId]: {
+            ...prev.slotGeometries[sceneId],
+            [deviceKey]: {
+              ...prev.slotGeometries[sceneId]?.[deviceKey],
+              [localeKey]: {
+                ...prev.slotGeometries[sceneId]?.[deviceKey]?.[localeKey],
+                [layoutKey]: slots,
+              },
+            },
+          },
+        },
+      };
+    });
   const setSceneCopy = (sceneId: string, fieldName: "headline" | "subhead", text: string) =>
     set(`copy:${sceneId}:${fieldName}`, (prev) => ({
       ...prev,
@@ -314,13 +348,14 @@ function Loaded({
         screenOnly,
         sceneLayouts,
         capturePositions,
+        slotGeometries,
       }, projectId).then(
         () => setSaveError(null),
         (e: Error) => setSaveError(e.message),
       );
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts, capturePositions, projectId]);
+  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts, capturePositions, slotGeometries, projectId]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -421,6 +456,8 @@ function Loaded({
                 onSceneLayout={setSceneLayout}
                 capturePositions={capturePositions}
                 onCapturePosition={setCapturePosition}
+                slotGeometries={slotGeometries}
+                onSlotGeometry={setSlotGeometry}
               />
             </div>
           ) : spec ? (
@@ -457,6 +494,7 @@ type DesignState = {
   /** Per-scene layout overrides; a scene absent here follows `layout`. */
   sceneLayouts: Record<string, string>;
   capturePositions: CapturePositions;
+  slotGeometries: SlotGeometries;
   /** Screenshot scene ids as arranged by dragging tiles; empty means the config's order. */
   order: string[];
 };

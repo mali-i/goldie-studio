@@ -19,6 +19,8 @@ import {
 import type {
   CapturePosition,
   CapturePositions,
+  SlotGeometries,
+  SlotGeometry,
   Decoration,
   Design,
   DesignScene,
@@ -36,6 +38,12 @@ import { Button } from "./ui/button";
 const PAGE_SIZE = 5;
 /** Apple's cap on screenshots per device family. */
 const MAX_SCREENSHOTS = 10;
+type Slot = "primary" | "secondary";
+type SlotEditorState = {
+  mode: "image" | "slot";
+  selectedSlot: Slot;
+  onSelectSlot: (slot: Slot) => void;
+};
 
 /**
  * Page-turn animation: the incoming page slides in from the side the arrow
@@ -93,6 +101,8 @@ export function Strip({
   onSceneLayout,
   capturePositions,
   onCapturePosition,
+  slotGeometries,
+  onSlotGeometry,
 }: {
   design: Design;
   captures: DeviceCaptures;
@@ -120,6 +130,15 @@ export function Strip({
     locale: string,
     slot: "primary" | "secondary",
     position: CapturePosition,
+  ) => void;
+  slotGeometries: SlotGeometries;
+  onSlotGeometry: (
+    sceneId: string,
+    device: string,
+    locale: string,
+    layout: string,
+    slot: "primary" | "secondary",
+    geometry: SlotGeometry | undefined,
   ) => void;
 }) {
   const theme = design.theme;
@@ -212,7 +231,7 @@ export function Strip({
     /** At least one uploaded capture can be repositioned in the lightbox. */
     repositionable: boolean;
     /** The composition; editable renders the copy as editable text (lightbox only). */
-    scene: (editable: boolean) => ReactNode;
+    scene: (editable: boolean, editor?: SlotEditorState) => ReactNode;
     /** Set on screenshot tiles, which can be dragged into a new order. */
     sceneId?: string;
     /** The lightbox's per-scene layout override control (screenshots only). */
@@ -221,6 +240,12 @@ export function Strip({
       /** The layout the scene gets with no override: the template's pick, or the theme layout. */
       defaultKey: string;
       onChange: (key: string | undefined) => void;
+    };
+    slotEditor?: {
+      slots: Slot[];
+      defaults: Partial<Record<Slot, SlotGeometry>>;
+      current: Partial<Record<Slot, SlotGeometry>>;
+      onChange: (slot: Slot, geometry: SlotGeometry | undefined) => void;
     };
   };
   const entries: Entry[] = [];
@@ -264,6 +289,25 @@ export function Strip({
     const presentation = tileSpec.screenshot.width > tileSpec.screenshot.height
       ? LANDSCAPE_LAYOUTS[spec.key].capturePresentation
       : spec.capturePresentation;
+    const base = compose(spec, tileSpec.screenshot, theme, { screenOnly, geom });
+    const resolvedSpec = tileSpec.screenshot.width > tileSpec.screenshot.height
+      ? LANDSCAPE_LAYOUTS[spec.key]
+      : spec;
+    const defaults: Partial<Record<Slot, SlotGeometry>> = {};
+    for (const [index, device] of base.devices.entries()) {
+      const placement = resolvedSpec.devices[index]!;
+      const tileWidth = placement.fitBelowCopy ? base.designWidth :
+        (base.designWidth !== tileSpec.screenshot.width && spec.copy.position !== "none"
+          ? tileSpec.screenshot.width
+          : base.designWidth);
+      defaults[device.capture] = {
+        x: (device.frame.left + device.frame.width / 2) / base.width,
+        y: (device.frame.top + device.frame.height / 2) / base.height,
+        widthRatio: device.frame.width / tileWidth,
+        rotate: device.rotate,
+      };
+    }
+    const currentGeometries = slotGeometries[scene.id]?.[tileSpec.key]?.[locale]?.[spec.key] ?? {};
     for (let slice = 0; slice < spec.span; slice++) {
       entries.push({
         key: spec.span > 1 ? `${scene.id}#${slice + 1}` : scene.id,
@@ -281,8 +325,16 @@ export function Strip({
         // Only the first slice drags; the second follows it.
         sceneId: slice === 0 ? scene.id : undefined,
         layout: layoutControl,
-        scene: (editable) => (
+        slotEditor: {
+          slots: base.devices.map((device) => device.capture),
+          defaults,
+          current: currentGeometries,
+          onChange: (slot, geometry) =>
+            onSlotGeometry(scene.id, tileSpec.key, locale, spec.key, slot, geometry),
+        },
+        scene: (editable, editor) => (
           <ScreenshotScene
+            key={`${scene.id}:${spec.key}:${slice}`}
             spec={spec}
             slice={slice}
             tile={tileSpec.screenshot}
@@ -300,6 +352,12 @@ export function Strip({
             captureUrl={primary?.url}
             secondCaptureUrl={secondary?.url}
             capturePositions={capturePositions[scene.id]?.[tileSpec.key]?.[locale]}
+            slotGeometries={currentGeometries}
+            defaultSlotGeometries={defaults}
+            slotEditor={editable ? editor : undefined}
+            onSlotGeometry={editable
+              ? (slot, geometry) => onSlotGeometry(scene.id, tileSpec.key, locale, spec.key, slot, geometry)
+              : undefined}
             onCapturePosition={editable
               ? (slot, position) => onCapturePosition(scene.id, tileSpec.key, locale, slot, position)
               : undefined}
@@ -543,12 +601,18 @@ function Lightbox({
     height: number;
     editable: boolean;
     repositionable: boolean;
-    scene: (editable: boolean) => ReactNode;
+    scene: (editable: boolean, editor?: SlotEditorState) => ReactNode;
     layout?: {
       value: string | undefined;
       /** The layout the scene gets with no override: the template's pick, or the theme layout. */
       defaultKey: string;
       onChange: (key: string | undefined) => void;
+    };
+    slotEditor?: {
+      slots: Slot[];
+      defaults: Partial<Record<Slot, SlotGeometry>>;
+      current: Partial<Record<Slot, SlotGeometry>>;
+      onChange: (slot: Slot, geometry: SlotGeometry | undefined) => void;
     };
   };
   layouts: Design["layouts"];
@@ -557,9 +621,20 @@ function Lightbox({
   onClose: () => void;
   onStep: (delta: number) => void;
 }) {
+  const [mode, setMode] = useState<"image" | "slot">("image");
+  const [selectedSlot, setSelectedSlot] = useState<Slot>("primary");
+  useEffect(() => {
+    setSelectedSlot(entry.slotEditor?.slots[0] ?? "primary");
+  }, [index]);
+  const slot = entry.slotEditor?.slots.includes(selectedSlot)
+    ? selectedSlot
+    : entry.slotEditor?.slots[0] ?? "primary";
+  const defaultGeometry = entry.slotEditor?.defaults[slot];
+  const geometry = entry.slotEditor?.current[slot] ?? defaultGeometry;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.isContentEditable) return;
+      if (e.target instanceof HTMLElement &&
+        (e.target.isContentEditable || e.target instanceof HTMLInputElement)) return;
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowLeft") onStep(-1);
       else if (e.key === "ArrowRight") onStep(1);
@@ -588,29 +663,88 @@ function Lightbox({
           aspectRatio: `${entry.width} / ${entry.height}`,
           // Sized by width alone so the aspect ratio always holds: a height
           // cap plus flex shrinking would squash the box, stretching the bezel
-          // art off the cover-fitted capture (a misaligned camera cutout). The
-          // 7.5rem clears the padding, gap and layout row below the scene.
+          // art off the cover-fitted capture (a misaligned camera cutout).
+          // Leave room for the layout and slot controls below the scene.
           flexShrink: 0,
-          width: `min(calc(100vw - 4rem), calc((100vh - 7.5rem) * ${entry.width / entry.height}))`,
+          width: `min(calc(100vw - 4rem), calc((100vh - 11rem) * ${entry.width / entry.height}))`,
         }}
       >
-        {entry.scene(true)}
+        {entry.scene(true, { mode, selectedSlot: slot, onSelectSlot: setSelectedSlot })}
       </div>
-      <div className="flex items-center gap-3 text-[11px] text-neutral-300">
-        {entry.repositionable ? <span>Drag a screenshot to adjust its crop.</span> : null}
-        {entry.layout ? (
-          <div className="dark w-44 text-foreground">
-            <Select
-              value={entry.layout.value ?? ""}
-              onChange={(v) => entry.layout?.onChange(v || undefined)}
-              options={[
-                [
-                  "",
-                  `Default (${layouts.find((l) => l.key === entry.layout?.defaultKey)?.label ?? entry.layout.defaultKey})`,
-                ],
-                ...layoutOptions(layouts),
-              ]}
-            />
+      <div className="flex w-full max-w-[900px] flex-col items-center gap-2 px-2 text-[11px] text-neutral-300">
+        <div className="flex w-full flex-wrap items-center justify-center gap-3">
+          {entry.slotEditor ? (
+            <div className="flex items-center gap-1">
+              <Button type="button" size="sm" variant={mode === "image" ? "secondary" : "outline"}
+                onClick={() => setMode("image")}>Image</Button>
+              <Button type="button" size="sm" variant={mode === "slot" ? "secondary" : "outline"}
+                onClick={() => setMode("slot")}>Slot</Button>
+            </div>
+          ) : null}
+          {mode === "image" && entry.repositionable
+            ? <span>Drag a screenshot to adjust its crop.</span>
+            : null}
+          {mode === "slot" ? <span>Drag a slot to move it.</span> : null}
+          {entry.layout ? (
+            <div className="dark w-44 text-foreground">
+              <Select
+                value={entry.layout.value ?? ""}
+                onChange={(v) => entry.layout?.onChange(v || undefined)}
+                options={[
+                  [
+                    "",
+                    `Default (${layouts.find((l) => l.key === entry.layout?.defaultKey)?.label ?? entry.layout.defaultKey})`,
+                  ],
+                  ...layoutOptions(layouts),
+                ]}
+              />
+            </div>
+          ) : null}
+        </div>
+        {mode === "slot" && entry.slotEditor && geometry && defaultGeometry ? (
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-2">
+            <div className="dark w-28 text-foreground">
+              <Select
+                value={slot}
+                onChange={(value) => setSelectedSlot(value as Slot)}
+                options={entry.slotEditor.slots.map((value, index) =>
+                  [value, `Screen ${index + 1}`] as [string, string])}
+              />
+            </div>
+            <label className="flex items-center gap-2">
+              Size
+              <input
+                aria-label="Slot size"
+                className="w-20"
+                type="range"
+                min="40" max="160" step="1"
+                value={Math.round(geometry.widthRatio / defaultGeometry.widthRatio * 100)}
+                onChange={(event) => entry.slotEditor?.onChange(slot, {
+                  ...geometry,
+                  widthRatio: defaultGeometry.widthRatio * Number(event.target.value) / 100,
+                })}
+              />
+              <span className="w-9 text-right">{Math.round(geometry.widthRatio / defaultGeometry.widthRatio * 100)}%</span>
+            </label>
+            <label className="flex items-center gap-2">
+              Angle
+              <input
+                aria-label="Slot rotation"
+                className="w-20"
+                type="range"
+                min="-45" max="45" step="1"
+                value={geometry.rotate}
+                onChange={(event) => entry.slotEditor?.onChange(slot, {
+                  ...geometry, rotate: Number(event.target.value),
+                })}
+              />
+              <span className="w-9 text-right">{geometry.rotate}°</span>
+            </label>
+            <Button type="button" size="sm" variant="outline"
+              disabled={!entry.slotEditor.current[slot]}
+              onClick={() => entry.slotEditor?.onChange(slot, undefined)}>
+              Reset slot
+            </Button>
           </div>
         ) : null}
       </div>
@@ -740,6 +874,10 @@ function ScreenshotScene({
   secondCaptureUrl,
   capturePositions,
   onCapturePosition,
+  slotGeometries,
+  defaultSlotGeometries,
+  slotEditor,
+  onSlotGeometry,
   decorations,
   locale,
   onEdit,
@@ -763,11 +901,20 @@ function ScreenshotScene({
   secondCaptureUrl: string | undefined;
   capturePositions?: Partial<Record<"primary" | "secondary", CapturePosition>>;
   onCapturePosition?: (slot: "primary" | "secondary", position: CapturePosition) => void;
+  slotGeometries?: Partial<Record<Slot, SlotGeometry>>;
+  defaultSlotGeometries: Partial<Record<Slot, SlotGeometry>>;
+  slotEditor?: SlotEditorState;
+  onSlotGeometry?: (slot: Slot, geometry: SlotGeometry) => void;
   decorations: Decoration[];
   locale: string;
   onEdit?: (field: "headline" | "subhead", text: string) => void;
 }) {
-  const c = compose(spec, tile, theme, { screenOnly, geom });
+  const [draftGeometries, setDraftGeometries] = useState(slotGeometries ?? {});
+  useEffect(() => setDraftGeometries(slotGeometries ?? {}), [slotGeometries]);
+  const activeGeometries = slotEditor?.mode === "slot" ? draftGeometries : slotGeometries;
+  const c = compose(spec, tile, theme, {
+    screenOnly, geom, slotGeometries: activeGeometries,
+  });
   const capturePresentation =
     (tile.width > tile.height ? LANDSCAPE_LAYOUTS[spec.key] : spec).capturePresentation;
   const { w, h } = cq(tile);
@@ -854,8 +1001,18 @@ function ScreenshotScene({
               capturePresentation={capturePresentation}
               captureUrl={url}
               capturePosition={capturePositions?.[device.capture]}
-              onCapturePosition={onCapturePosition
+              onCapturePosition={slotEditor?.mode !== "slot" && onCapturePosition
                 ? (position) => onCapturePosition(device.capture, position)
+                : undefined}
+              slotMode={slotEditor?.mode === "slot"}
+              selected={slotEditor?.mode === "slot" && slotEditor.selectedSlot === device.capture}
+              onSelectSlot={() => slotEditor?.onSelectSlot(device.capture)}
+              slotGeometry={activeGeometries?.[device.capture] ?? defaultSlotGeometries[device.capture]}
+              onSlotGeometryDraft={slotEditor?.mode === "slot"
+                ? (geometry) => setDraftGeometries((prev) => ({ ...prev, [device.capture]: geometry }))
+                : undefined}
+              onSlotGeometryCommit={slotEditor?.mode === "slot"
+                ? (geometry) => onSlotGeometry?.(device.capture, geometry)
                 : undefined}
               missing={
                 url ? undefined : `${sceneId} / Screen ${device.capture === "secondary" ? 2 : 1}`
@@ -881,6 +1038,12 @@ function DeviceView({
   captureUrl,
   capturePosition,
   onCapturePosition,
+  slotMode,
+  selected,
+  onSelectSlot,
+  slotGeometry,
+  onSlotGeometryDraft,
+  onSlotGeometryCommit,
   missing,
 }: {
   device: Composition["devices"][number];
@@ -890,6 +1053,12 @@ function DeviceView({
   captureUrl: string | undefined;
   capturePosition?: CapturePosition;
   onCapturePosition?: (position: CapturePosition) => void;
+  slotMode?: boolean;
+  selected?: boolean;
+  onSelectSlot?: () => void;
+  slotGeometry?: SlotGeometry;
+  onSlotGeometryDraft?: (geometry: SlotGeometry) => void;
+  onSlotGeometryCommit?: (geometry: SlotGeometry) => void;
   /** Scene id to name in the placeholder when the capture is missing. */
   missing: string | undefined;
 }) {
@@ -910,6 +1079,24 @@ function DeviceView({
     current: CapturePosition;
     viewport: { width: number; height: number };
     image: { width: number; height: number };
+  } | null>(null);
+  const slotDrag = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    start: SlotGeometry;
+    current: SlotGeometry;
+    canvasWidth: number;
+    canvasHeight: number;
+  } | null>(null);
+  const resizeDrag = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    start: SlotGeometry;
+    current: SlotGeometry;
+    width: number;
+    height: number;
   } | null>(null);
   useEffect(() => {
     if (!drag.current) setPosition(savedPosition);
@@ -973,6 +1160,92 @@ function DeviceView({
     }
     event.stopPropagation();
   };
+  const onSlotPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!slotMode || !slotGeometry || event.button !== 0) return;
+    onSelectSlot?.();
+    slotDrag.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      start: slotGeometry,
+      current: slotGeometry,
+      canvasWidth: event.currentTarget.parentElement?.clientWidth ?? 1,
+      canvasHeight: event.currentTarget.parentElement?.clientHeight ?? 1,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const onSlotPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = slotDrag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const clamp = (value: number) => Math.max(0, Math.min(1, value));
+    const next = {
+      ...current.start,
+      x: clamp(current.start.x + (event.clientX - current.clientX) / current.canvasWidth),
+      y: clamp(current.start.y + (event.clientY - current.clientY) / current.canvasHeight),
+    };
+    current.current = next;
+    onSlotGeometryDraft?.(next);
+    event.preventDefault();
+  };
+  const onSlotPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = slotDrag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    slotDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (current.current.x !== current.start.x || current.current.y !== current.start.y) {
+      onSlotGeometryCommit?.(current.current);
+    }
+    event.stopPropagation();
+  };
+  const onResizePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!slotGeometry || event.button !== 0) return;
+    const frameElement = event.currentTarget.parentElement;
+    resizeDrag.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      start: slotGeometry,
+      current: slotGeometry,
+      width: frameElement?.offsetWidth ?? 1,
+      height: frameElement?.offsetHeight ?? 1,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const onResizePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const current = resizeDrag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const radians = (current.start.rotate * Math.PI) / 180;
+    const dx = event.clientX - current.clientX;
+    const dy = event.clientY - current.clientY;
+    const localX = Math.cos(radians) * dx + Math.sin(radians) * dy;
+    const localY = -Math.sin(radians) * dx + Math.cos(radians) * dy;
+    const size = Math.max(0.1, Math.min(2,
+      current.start.widthRatio * (1 + localX / current.width - localY / current.height),
+    ));
+    const next = { ...current.start, widthRatio: size };
+    current.current = next;
+    onSlotGeometryDraft?.(next);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const onResizePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const current = resizeDrag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    resizeDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (current.current.widthRatio !== current.start.widthRatio) {
+      onSlotGeometryCommit?.(current.current);
+    }
+    event.stopPropagation();
+  };
   // The screen as fractions of the device box, so it rotates with it.
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
@@ -984,6 +1257,19 @@ function DeviceView({
         width: w(frame.width),
         height: h(frame.height),
         transform: device.rotate ? `rotate(${device.rotate}deg)` : undefined,
+        zIndex: selected ? 10 : undefined,
+        cursor: slotMode ? "move" : undefined,
+        touchAction: slotMode ? "none" : undefined,
+        outline: selected ? `${w(tile.width * 0.008)} solid #38bdf8` : undefined,
+        outlineOffset: selected ? w(tile.width * 0.006) : undefined,
+      }}
+      onPointerDown={onSlotPointerDown}
+      onPointerMove={onSlotPointerMove}
+      onPointerUp={onSlotPointerUp}
+      onPointerCancel={(event) => {
+        if (slotDrag.current?.pointerId !== event.pointerId) return;
+        onSlotGeometryDraft?.(slotDrag.current.start);
+        slotDrag.current = null;
       }}
     >
       <div
@@ -1048,6 +1334,24 @@ function DeviceView({
             position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none",
           }}
         />
+      ) : null}
+      {slotMode && selected ? (
+        <button
+          type="button"
+          aria-label={`Resize ${device.capture} slot`}
+          className="absolute -top-2 -right-2 z-10 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-sky-500 text-sm font-bold text-white shadow-lg"
+          style={{ cursor: "nesw-resize", touchAction: "none" }}
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onPointerCancel={(event) => {
+            if (resizeDrag.current?.pointerId !== event.pointerId) return;
+            onSlotGeometryDraft?.(resizeDrag.current.start);
+            resizeDrag.current = null;
+            event.stopPropagation();
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >↗</button>
       ) : null}
     </div>
   );

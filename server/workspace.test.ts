@@ -200,6 +200,35 @@ describe("workspace projects", () => {
       .toEqual({});
   });
 
+  test("persists and resets independent slot geometry overrides", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Slot Geometry");
+    const slotGeometries = {
+      "scene-1": {
+        "iphone-6.9": {
+          "en-US": {
+            "side-by-side": {
+              primary: { x: 0.3, y: 0.6, widthRatio: 0.5, rotate: -8 },
+              secondary: { x: 0.7, y: 0.7, widthRatio: 0.42, rotate: 6 },
+            },
+            hero: {
+              primary: { x: 0.5, y: 0.72, widthRatio: 0.9, rotate: 0 },
+            },
+          },
+        },
+      },
+    };
+    await workspaceService.applyDesign(root, project.project.id, { slotGeometries });
+    expect((await workspaceService.projectDesign(root, project.project.id)).slotGeometries)
+      .toEqual(slotGeometries);
+    expect((await workspaceService.readProject(root, project.project.id)).config.scenes[0]?.slotGeometries)
+      .toEqual(slotGeometries["scene-1"]);
+    await workspaceService.applyDesign(root, project.project.id, { slotGeometries: {} });
+    expect((await workspaceService.projectDesign(root, project.project.id)).slotGeometries)
+      .toEqual({});
+  });
+
   test("migrates the removed classic SVG frame to a real PNG variant", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);
@@ -244,6 +273,41 @@ describe("workspace projects", () => {
       primary: "screenshots/iphone-6.9/en-US/scene-1.png",
     });
     expect(await readFile(path, "utf8")).toContain('"primary"');
+  });
+
+  test("migrates slot geometry saved before layouts were separate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Legacy Geometry");
+    const path = join(root, project.project.id, "goldie.config.ts");
+    const geometry = { x: 0.35, y: 0.7, widthRatio: 0.48, rotate: -9 };
+    const legacy = {
+      ...project.config,
+      theme: { ...project.config.theme, template: "dynamic" },
+      scenes: project.config.scenes.map((scene, index) => index === 0
+        ? {
+          ...scene,
+          layout: "side-by-side",
+          slotGeometries: { "iphone-6.9": { "en-US": { primary: geometry } } },
+        }
+        : index === 1
+          ? {
+            ...scene,
+            slotGeometries: { "iphone-6.9": { "en-US": { secondary: geometry } } },
+          }
+          : scene),
+    };
+    await writeFile(
+      path,
+      `const config = /* goldie-config:start */${JSON.stringify(legacy, null, 2)}/* goldie-config:end */;\nexport default config;\n`,
+    );
+
+    const design = await workspaceService.projectDesign(root, project.project.id);
+    expect(design.slotGeometries["scene-1"]?.["iphone-6.9"]?.["en-US"]?.["side-by-side"]?.primary)
+      .toEqual(geometry);
+    expect(design.slotGeometries["scene-2"]?.["iphone-6.9"]?.["en-US"]?.["duo-tilt"]?.secondary)
+      .toEqual(geometry);
+    expect((await readFile(path, "utf8"))).toContain('"duo-tilt"');
   });
 
   test("migrates projects from workspace/projects into the flat layout", async () => {

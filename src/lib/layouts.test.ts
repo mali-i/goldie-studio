@@ -67,6 +67,22 @@ describe("Mac landscape layouts", () => {
     }
   });
 
+  test("slot geometry overrides only the selected card and keeps its aspect ratio", () => {
+    const spec = LAYOUTS["side-by-side"];
+    const original = compose(spec, MAC_TILE, THEME, { geom: MAC_GEOMETRY });
+    const edited = compose(spec, MAC_TILE, THEME, {
+      geom: MAC_GEOMETRY,
+      slotGeometries: {
+        primary: { x: 0.36, y: 0.63, widthRatio: 0.36, rotate: 12 },
+      },
+    });
+    expect(edited.devices[0]?.frame.width).toBe(MAC_TILE.width * 0.36);
+    expect(edited.devices[0]?.frame.width / edited.devices[0]!.frame.height).toBeCloseTo(3 / 4);
+    expect(edited.devices[0]?.frame.left).not.toBe(original.devices[0]?.frame.left);
+    expect(edited.devices[0]?.rotate).toBe(12);
+    expect(edited.devices[1]).toEqual(original.devices[1]);
+  });
+
   test("screenshot pair shows two complete, separated captures beneath the copy", () => {
     const c = compose(LAYOUTS["screenshot-pair"], MAC_TILE, THEME, { geom: MAC_GEOMETRY });
     const [left, right] = c.devices;

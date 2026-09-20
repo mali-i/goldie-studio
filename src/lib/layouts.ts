@@ -2,6 +2,7 @@
  * Browser-side layout engine. This intentionally lives inside Studio so the
  * the standalone app can build without external rendering dependencies.
  */
+import type { SlotGeometry } from "../manifest";
 
 export const LAYOUT_KEYS = [
   "classic",
@@ -489,7 +490,11 @@ export function compose(
   spec: LayoutSpec,
   tileIn: { width: number; height: number },
   theme: { copyHeightRatio: number; deviceWidthRatio: number },
-  opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
+  opts: {
+    screenOnly?: boolean;
+    geom?: FrameGeometry;
+    slotGeometries?: Partial<Record<DevicePlacement["capture"], SlotGeometry>>;
+  } = {},
 ): Composition {
   const landscape = tileIn.width > tileIn.height;
   const resolvedSpec = landscape ? LANDSCAPE_LAYOUTS[spec.key] : spec;
@@ -552,23 +557,25 @@ export function compose(
 
   const squat = tile !== tileIn;
   const devices = resolvedSpec.devices.map((placement) => {
-    const widthRatio = classic && !landscape ? theme.deviceWidthRatio : placement.widthRatio;
+    const override = opts.slotGeometries?.[placement.capture];
+    const widthRatio = override?.widthRatio ??
+      (classic && !landscape ? theme.deviceWidthRatio : placement.widthRatio);
     const deviceTile =
       squat && !placement.fitBelowCopy && resolvedSpec.copy.position !== "none" ? tileIn : tile;
     let scale = (deviceTile.width * widthRatio) / art.width;
     let left: number;
     let top: number;
-    if (placement.fitBelowCopy) {
+    if (placement.fitBelowCopy && !override) {
       const bottomMargin = height * CLASSIC_BOTTOM_MARGIN;
       const available = height - copyHeight - bottomMargin;
       scale = Math.min(scale, available / art.height);
       left = (width - art.width * scale) / 2 + dx;
       top = copyHeight + (available - art.height * scale) / 2;
     } else {
-      left = tileIn.width * resolvedSpec.span * placement.x - (art.width * scale) / 2;
-      top = height * placement.y - (art.height * scale) / 2;
-      if (squat && copy?.position === "top") top = Math.max(top, copy.box.height + height * 0.015);
-      if (squat && copy?.position === "bottom") {
+      left = tileIn.width * resolvedSpec.span * (override?.x ?? placement.x) - (art.width * scale) / 2;
+      top = height * (override?.y ?? placement.y) - (art.height * scale) / 2;
+      if (squat && !override && copy?.position === "top") top = Math.max(top, copy.box.height + height * 0.015);
+      if (squat && !override && copy?.position === "bottom") {
         top = Math.min(top, copy.box.top - height * 0.015 - art.height * scale);
       }
     }
@@ -581,7 +588,7 @@ export function compose(
         height: geom.screen.height * scale,
         radius: geom.screenRadius * scale,
       },
-      rotate: placement.rotate,
+      rotate: override?.rotate ?? placement.rotate,
       capture: placement.capture,
     };
   });

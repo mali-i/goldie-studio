@@ -12,7 +12,7 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Plugin } from "vite";
-import { LAYOUTS, TEMPLATES } from "../src/lib/layouts";
+import { isLayoutKey, isTemplateKey, LAYOUTS, resolveScenes, TEMPLATES } from "../src/lib/layouts";
 import {
   defaultProjectConfig,
   type GoldieProjectConfig,
@@ -334,6 +334,37 @@ async function readConfig(root: string, id: string): Promise<GoldieProjectConfig
     config.frame.variant = "17-pro-blue";
     migrated = true;
   }
+  // An earlier slot editor saved geometry directly under device/locale.
+  // Move those values into the layout that the scene used at the time.
+  const template = config.theme?.template;
+  const templateChoice = typeof template === "string" && isTemplateKey(template)
+    ? template
+    : Array.isArray(template) && template.every(isLayoutKey)
+      ? template
+      : undefined;
+  const resolvedScenes = resolveScenes(config.scenes ?? [], {
+    template: templateChoice,
+    layout: config.theme?.layout,
+  });
+  for (const { scene, layout } of resolvedScenes) {
+    const devices = scene.slotGeometries as unknown as Record<string, Record<string, Record<string, unknown>>> | undefined;
+    for (const locales of Object.values(devices ?? {})) {
+      for (const layouts of Object.values(locales ?? {})) {
+        if (!isRecord(layouts)) continue;
+        const legacySlots = Object.fromEntries(
+          (["primary", "secondary"] as const)
+            .filter((slot) => isSlotGeometry(layouts[slot]))
+            .map((slot) => [slot, layouts[slot]]),
+        );
+        if (Object.keys(legacySlots).length === 0) continue;
+        delete layouts.primary;
+        delete layouts.secondary;
+        const existing = layouts[layout.key];
+        layouts[layout.key] = { ...legacySlots, ...(isRecord(existing) ? existing : {}) };
+        migrated = true;
+      }
+    }
+  }
   validateConfig(config as GoldieProjectConfig);
   if (migrated) {
     await atomicWrite(configFile(root, id), serializeConfig(config as GoldieProjectConfig));
@@ -385,6 +416,22 @@ function validateConfig(config: GoldieProjectConfig): void {
         for (const [slot, position] of Object.entries(slots)) {
           if ((slot !== "primary" && slot !== "secondary") || !isCapturePosition(position)) {
             throw new HttpError(422, `Invalid screenshot position: ${slot}`);
+          }
+        }
+      }
+    }
+    for (const locales of Object.values(scene.slotGeometries ?? {})) {
+      if (!isRecord(locales)) throw new HttpError(422, "Invalid slot geometry devices.");
+      for (const layouts of Object.values(locales)) {
+        if (!isRecord(layouts)) throw new HttpError(422, "Invalid slot geometry locales.");
+        for (const [layout, slots] of Object.entries(layouts)) {
+          if (!Object.hasOwn(LAYOUTS, layout) || !isRecord(slots)) {
+            throw new HttpError(422, `Invalid slot layout: ${layout}`);
+          }
+          for (const [slot, geometry] of Object.entries(slots)) {
+            if ((slot !== "primary" && slot !== "secondary") || !isSlotGeometry(geometry)) {
+              throw new HttpError(422, `Invalid slot geometry: ${slot}`);
+            }
           }
         }
       }
@@ -501,6 +548,9 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
   const capturePositions = isRecord(design.capturePositions)
     ? (design.capturePositions as Record<string, unknown>)
     : undefined;
+  const slotGeometries = isRecord(design.slotGeometries)
+    ? (design.slotGeometries as Record<string, unknown>)
+    : undefined;
   for (const scene of config.scenes) {
     if (copy?.[scene.id]?.headline) scene.headline = { ...scene.headline, ...copy[scene.id]!.headline };
     if (copy?.[scene.id]?.subhead) scene.subhead = { ...scene.subhead, ...copy[scene.id]!.subhead };
@@ -534,6 +584,37 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
       if (Object.keys(next).length > 0) scene.capturePositions = next;
       else delete scene.capturePositions;
     }
+    if (slotGeometries) {
+      const rawScene = slotGeometries[scene.id];
+      const next: NonNullable<ProjectScene["slotGeometries"]> = {};
+      if (isRecord(rawScene)) {
+        for (const device of config.devices) {
+          const rawDevice = rawScene[device];
+          if (!isRecord(rawDevice)) continue;
+          for (const locale of config.locales) {
+            const rawLocale = rawDevice[locale];
+            if (!isRecord(rawLocale)) continue;
+            const layouts: NonNullable<ProjectScene["slotGeometries"]>[string][string] = {};
+            for (const [layout, rawSlots] of Object.entries(rawLocale)) {
+              if (!Object.hasOwn(LAYOUTS, layout) || !isRecord(rawSlots)) continue;
+              const slots: NonNullable<ProjectScene["slotGeometries"]>[string][string][string] = {};
+              for (const slot of ["primary", "secondary"] as const) {
+                const value = rawSlots[slot];
+                if (isSlotGeometry(value)) {
+                  slots[slot] = {
+                    x: value.x, y: value.y, widthRatio: value.widthRatio, rotate: value.rotate,
+                  };
+                }
+              }
+              if (Object.keys(slots).length > 0) layouts[layout] = slots;
+            }
+            if (Object.keys(layouts).length > 0) (next[device] ??= {})[locale] = layouts;
+          }
+        }
+      }
+      if (Object.keys(next).length > 0) scene.slotGeometries = next;
+      else delete scene.slotGeometries;
+    }
   }
   if (Array.isArray(design.order)) {
     const rank = new Map((design.order as string[]).map((sceneId, index) => [sceneId, index]));
@@ -559,6 +640,11 @@ async function projectDesign(root: string, id: string) {
     capturePositions: Object.fromEntries(
       config.scenes.flatMap((scene) =>
         scene.capturePositions ? [[scene.id, scene.capturePositions]] : [],
+      ),
+    ),
+    slotGeometries: Object.fromEntries(
+      config.scenes.flatMap((scene) =>
+        scene.slotGeometries ? [[scene.id, scene.slotGeometries]] : [],
       ),
     ),
   };
@@ -724,6 +810,18 @@ function isCapturePosition(value: unknown): value is { x: number; y: number } {
     Number.isFinite(value.y) &&
     value.y >= 0 &&
     value.y <= 1
+  );
+}
+
+function isSlotGeometry(value: unknown): value is { x: number; y: number; widthRatio: number; rotate: number } {
+  return (
+    isRecord(value) &&
+    typeof value.x === "number" && Number.isFinite(value.x) && value.x >= 0 && value.x <= 1 &&
+    typeof value.y === "number" && Number.isFinite(value.y) && value.y >= 0 && value.y <= 1 &&
+    typeof value.widthRatio === "number" && Number.isFinite(value.widthRatio) &&
+    value.widthRatio >= 0.1 && value.widthRatio <= 2 &&
+    typeof value.rotate === "number" && Number.isFinite(value.rotate) &&
+    value.rotate >= -180 && value.rotate <= 180
   );
 }
 

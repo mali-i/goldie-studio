@@ -174,6 +174,8 @@ export type SavedDesign = {
   sceneLayouts?: Record<string, string>;
   /** Crop positions by scene, device, locale, and screenshot slot. */
   capturePositions?: CapturePositions;
+  /** Optional slot geometry by scene, device, locale, layout, and slot. */
+  slotGeometries?: SlotGeometries;
 };
 
 /** 0 is left/top, 0.5 is centered, and 1 is right/bottom. */
@@ -183,6 +185,14 @@ export type CapturePositionsByDevice = Record<
   Record<string, Partial<Record<"primary" | "secondary", CapturePosition>>>
 >;
 export type CapturePositions = Record<string, CapturePositionsByDevice>;
+
+/** x/y are normalized centers; widthRatio uses the layout's reference tile width. */
+export type SlotGeometry = { x: number; y: number; widthRatio: number; rotate: number };
+export type SlotGeometriesByDevice = Record<
+  string,
+  Record<string, Record<string, Partial<Record<"primary" | "secondary", SlotGeometry>>>>
+>;
+export type SlotGeometries = Record<string, SlotGeometriesByDevice>;
 
 export type SceneCopy = {
   headline?: Record<string, string>;
