@@ -1,6 +1,12 @@
 import type { CapturePositionsByDevice, Decoration, SlotGeometriesByDevice, Theme } from "./manifest";
 
 export const PROJECT_SCHEMA_VERSION = 1 as const;
+export const DEFAULT_DEVICE_BY_PLATFORM = {
+  ios: "iphone-6.9",
+  ipados: "ipad-12.9",
+  android: "pixel-10-pro",
+  macos: "mac-2880x1800",
+} as const;
 export const WORKSPACE_FRAME_VARIANTS = [
   "17-pro-silver",
   "17-pro-blue",

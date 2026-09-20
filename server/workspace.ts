@@ -14,6 +14,7 @@ import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Plugin } from "vite";
 import { isLayoutKey, isTemplateKey, LAYOUTS, resolveScenes, TEMPLATES } from "../src/lib/layouts";
 import {
+  DEFAULT_DEVICE_BY_PLATFORM,
   defaultProjectConfig,
   type GoldieProjectConfig,
   type ProjectDetail,
@@ -82,6 +83,10 @@ function createHandler(root: string) {
           return sendJson(res, await touchProject(root, id, config.store.name));
         }
         return methodNotAllowed(res);
+      }
+      if (action === "devices" && req.method === "POST") {
+        const body = await readJson<{ device?: string }>(req);
+        return sendJson(res, await addDevice(root, id, body.device));
       }
       if (action === "design") {
         if (req.method === "GET") return sendJson(res, await projectDesign(root, id));
@@ -459,6 +464,20 @@ async function addScene(
   return touchProject(root, id, config.store.name);
 }
 
+async function addDevice(root: string, id: string, device: string | undefined): Promise<ProjectDetail> {
+  const supported: readonly string[] = Object.values(DEFAULT_DEVICE_BY_PLATFORM);
+  if (!device || !supported.includes(device)) {
+    throw new HttpError(422, "Unsupported target device.");
+  }
+  const config = await readConfig(root, id);
+  if (!config.devices.includes(device)) {
+    config.devices.push(device);
+    await writeConfig(root, id, config);
+    return touchProject(root, id, config.store.name);
+  }
+  return { project: await readMeta(root, id), config };
+}
+
 async function saveScreenshot(
   root: string,
   id: string,
@@ -717,6 +736,25 @@ async function projectManifest(root: string, id: string) {
 }
 
 function deviceSpec(key: string) {
+  if (key === "ipad-12.9") {
+    return {
+      key,
+      label: "iPad 12.9",
+      platform: "ipados",
+      simulatorName: null,
+      screenshot: { width: 2048, height: 2732 },
+      preview: null,
+      frame: {
+        url: "frames/ipad-12.9.svg",
+        geom: {
+          width: 2200,
+          height: 2884,
+          screen: { x: 76, y: 76, width: 2048, height: 2732 },
+          screenRadius: 24,
+        },
+      },
+    };
+  }
   if (key === "pixel-10-pro") {
     return {
       key,
@@ -893,6 +931,7 @@ export const workspaceService = {
   listProjects,
   createProject,
   readProject,
+  addDevice,
   addScene,
   saveScreenshot,
   deleteScreenshot,

@@ -10,6 +10,28 @@ afterEach(async () => {
 });
 
 describe("workspace projects", () => {
+  test("adds device targets without replacing existing screenshots", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Device targets");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    await workspaceService.saveScreenshot(root, project.project.id, {
+      device: "iphone-6.9", locale: "en-US", sceneId: "scene-1",
+      mimeType: "image/png", base64: png,
+    });
+    await workspaceService.addDevice(root, project.project.id, "ipad-12.9");
+    await workspaceService.addDevice(root, project.project.id, "mac-2880x1800");
+    await workspaceService.addDevice(root, project.project.id, "ipad-12.9");
+
+    const saved = await workspaceService.readProject(root, project.project.id);
+    expect(saved.config.devices).toEqual(["iphone-6.9", "ipad-12.9", "mac-2880x1800"]);
+    const manifest = await workspaceService.projectManifest(root, project.project.id);
+    expect(manifest.design.captures["iphone-6.9"]?.screenshots).toHaveLength(1);
+    expect(manifest.devices.find((device) => device.key === "ipad-12.9")?.screenshot)
+      .toEqual({ width: 2048, height: 2732 });
+  });
+
   test("keeps uploaded screenshots and config changes isolated", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);

@@ -20,6 +20,12 @@ export const projectApi = {
       body: JSON.stringify({ name }),
     }),
   get: (id: string) => json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}`),
+  addDevice: (id: string, device: string) =>
+    json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/devices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device }),
+    }),
   addScene: (id: string) =>
     json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/scenes`, {
       method: "POST",

@@ -3,6 +3,7 @@ import {
   LaptopIcon,
   type LucideIcon,
   SmartphoneIcon,
+  TabletIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +12,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Strip } from "./components/Strip";
 import { useHistory } from "./lib/useHistory";
 import { projectApi } from "./project-api";
-import type { ProjectSummary } from "./project";
+import { DEFAULT_DEVICE_BY_PLATFORM, type ProjectSummary } from "./project";
 import {
   type BundledFont,
   type CapturePosition,
@@ -31,7 +32,7 @@ import {
 /** Sentinel for the config's own layout sequence, which the studio can show but not edit. */
 export const CUSTOM_TEMPLATE = "__custom__";
 
-export type Platform = "ios" | "android" | "macos";
+export type Platform = "ios" | "ipados" | "android" | "macos";
 
 /** Shown when a store tab has no configured upload target. */
 const ENABLE_PLATFORM: Record<
@@ -41,17 +42,22 @@ const ENABLE_PLATFORM: Record<
   ios: {
     icon: SmartphoneIcon,
     title: "No App Store screenshots yet",
-    body: "Choose an iPhone in Project settings, then upload screenshots.",
+    body: "Upload screenshots for this iPhone size.",
+  },
+  ipados: {
+    icon: TabletIcon,
+    title: "No iPad screenshots yet",
+    body: "Upload screenshots for this iPad size.",
   },
   android: {
     icon: SmartphoneIcon,
     title: "No Google Play screenshots yet",
-    body: "Choose an Android device in Project settings, then upload screenshots.",
+    body: "Upload screenshots for this Android size.",
   },
   macos: {
     icon: LaptopIcon,
     title: "No Mac App Store screenshots yet",
-    body: "Choose a Mac in Project settings, then upload screenshots.",
+    body: "Upload screenshots for this Mac size.",
   },
 };
 
@@ -174,11 +180,10 @@ function Loaded({
 }) {
   const design = manifest.design;
   const view = loadView(manifest.app.name);
-  // All device-family tabs render even when only one platform is configured, so the
-  // platform is view state of its own: an unconfigured tab has no device key
-  // to derive it from.
+  // The selected device family is view state. Workspace tabs register their
+  // target on first selection, while the bundled demo remains read-only.
   const initialPlatform: Platform =
-    view.platform === "ios" || view.platform === "android" || view.platform === "macos"
+    view.platform === "ios" || view.platform === "ipados" || view.platform === "android" || view.platform === "macos"
       ? view.platform
       : (manifest.devices.find((d) => d.key === view.device)?.platform ??
         manifest.devices[0]?.platform ??
@@ -193,10 +198,16 @@ function Loaded({
   const selectPlatform = (p: Platform) => {
     setPlatform(p);
     const devices = manifest.devices.filter((d) => d.platform === p);
-    if (devices.length > 0 && !devices.some((d) => d.key === device)) setDevice(devices[0]!.key);
+    const target = devices[0]?.key ?? DEFAULT_DEVICE_BY_PLATFORM[p];
+    setDevice(target);
+    if (!manifest.demo && devices.length === 0) {
+      projectApi.addDevice(projectId, target).then(
+        () => onAssetsChanged(),
+        (e: Error) => setSaveError(e.message),
+      );
+    }
   };
-  // Project settings can replace the configured device while this component
-  // remains mounted. Keep uploads and exports pointed at the newly loaded key.
+  // Keep uploads and exports pointed at a configured device after a manifest refresh.
   useEffect(() => {
     const devices = manifest.devices.filter((entry) => entry.platform === platform);
     if (devices.length > 0 && !devices.some((entry) => entry.key === device)) {
@@ -576,7 +587,7 @@ function fontFaces(fonts: BundledFont[]): string {
     .join("\n");
 }
 
-/** iOS devices are sizes ("iPhone 6.9"), so they carry an inch mark, as in the sidebar. */
+/** iPhone and iPad labels use screen sizes, so show the inch mark in the UI. */
 function deviceLabel(d: DeviceEntry): string {
-  return d.platform === "ios" ? `${d.label}"` : d.label;
+  return d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label;
 }

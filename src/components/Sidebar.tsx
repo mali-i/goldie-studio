@@ -28,19 +28,15 @@ import { ExportPanel } from "./ExportPanel";
 import { ProjectScreens } from "./ProjectScreens";
 import { ProjectSettings } from "./ProjectSettings";
 
-/**
- * The device-type rows, in display order. An entry without a platform renders
- * disabled: iPad stays that way until goldie can capture it, which then needs
- * a platform of its own here and in the app's view state.
- */
+/** The device-type rows, in display order. */
 const DEVICE_TYPES: Array<{
   key: string;
   icon: LucideIcon;
   label: string;
-  platform?: Platform;
+  platform: Platform;
 }> = [
   { key: "iphone", icon: SmartphoneIcon, label: "iPhone", platform: "ios" },
-  { key: "ipad", icon: TabletIcon, label: "iPad" },
+  { key: "ipad", icon: TabletIcon, label: "iPad", platform: "ipados" },
   { key: "android", icon: PlayIcon, label: "Android", platform: "android" },
   { key: "mac", icon: LaptopIcon, label: "Mac", platform: "macos" },
 ];
@@ -153,8 +149,6 @@ export function Sidebar({
       <div className="sidebar-scroll flex-1 overflow-y-auto">
         <div className="px-5 pt-5">
           <Field label="Media Size">
-            {/* Every device family stays visible even when the current project has
-                not configured an upload target for it yet. */}
             <RadioGroupPrimitive.Root
               value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
               onValueChange={(key) => {
@@ -164,26 +158,19 @@ export function Sidebar({
               aria-label="Device type"
               className="grid grid-cols-4 gap-2"
             >
-              {DEVICE_TYPES.map(({ key, icon: Icon, label, platform: target }) => (
+              {DEVICE_TYPES.map(({ key, icon: Icon, label }) => (
                 <RadioGroupPrimitive.Item
                   key={key}
                   value={key}
-                  disabled={!target}
                   className={cn(
                     "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
                     "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
                     "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
                     "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
-                    "data-disabled:pointer-events-none data-disabled:opacity-50",
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
                   <span>{label}</span>
-                  {target ? null : (
-                    <span className="absolute top-1 right-1.5 text-[9px] font-normal text-muted-foreground/70">
-                      Soon
-                    </span>
-                  )}
                 </RadioGroupPrimitive.Item>
               ))}
             </RadioGroupPrimitive.Root>
@@ -198,7 +185,7 @@ export function Sidebar({
                   onChange={onDevice}
                   options={platformDevices.map((d) => [
                     d.key,
-                    d.platform === "ios" ? `${d.label}"` : d.label,
+                    d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label,
                   ])}
                 />
               </Field>

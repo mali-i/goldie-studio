@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GoldieProjectConfig } from "../project";
 import { projectApi } from "../project-api";
-import { Field, Select } from "./Sidebar";
+import { Field } from "./Sidebar";
 
 export function ProjectSettings({
   projectId,
@@ -26,7 +26,6 @@ export function ProjectSettings({
 
   if (demo || !config) return null;
   const locale = config.locales[0] ?? "en-US";
-  const device = config.devices[0] ?? "iphone-6.9";
   const updateStore = <K extends keyof GoldieProjectConfig["store"]>(
     key: K,
     value: GoldieProjectConfig["store"][K],
@@ -59,17 +58,6 @@ export function ProjectSettings({
           <Input
             value={config.store.subtitle[locale] ?? ""}
             onChange={(e) => updateStore("subtitle", { ...config.store.subtitle, [locale]: e.target.value })}
-          />
-        </Field>
-        <Field label="Target device">
-          <Select
-            value={device}
-            onChange={(value) => setConfig({ ...config, devices: [value] })}
-            options={[
-              ["iphone-6.9", "iPhone 6.9\""],
-              ["pixel-10-pro", "Pixel 10 Pro"],
-              ["mac-2880x1800", "Mac 2880 × 1800"],
-            ]}
           />
         </Field>
         <Field label="Locale">
