@@ -1,4 +1,4 @@
-import type { Decoration, Theme } from "./manifest";
+import type { CapturePositionsByDevice, Decoration, Theme } from "./manifest";
 
 export const PROJECT_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_FRAME_VARIANTS = [
@@ -27,6 +27,8 @@ export type ProjectScene = {
   layout?: string;
   secondScene?: string;
   decorations?: Decoration[];
+  /** Screenshot crop positions by device, locale, then slot. */
+  capturePositions?: CapturePositionsByDevice;
 };
 
 export type ScreenshotSlot = "primary" | "secondary";

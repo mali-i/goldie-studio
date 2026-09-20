@@ -17,6 +17,7 @@ import {
   defaultProjectConfig,
   type GoldieProjectConfig,
   type ProjectDetail,
+  type ProjectScene,
   type ProjectSummary,
   type UploadScreenshotInput,
   WORKSPACE_FRAME_VARIANTS,
@@ -379,6 +380,15 @@ function validateConfig(config: GoldieProjectConfig): void {
         }
       }
     }
+    for (const locales of Object.values(scene.capturePositions ?? {})) {
+      for (const slots of Object.values(locales)) {
+        for (const [slot, position] of Object.entries(slots)) {
+          if ((slot !== "primary" && slot !== "secondary") || !isCapturePosition(position)) {
+            throw new HttpError(422, `Invalid screenshot position: ${slot}`);
+          }
+        }
+      }
+    }
   }
 }
 
@@ -488,6 +498,9 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
   const sceneLayouts = isRecord(design.sceneLayouts)
     ? (design.sceneLayouts as Record<string, unknown>)
     : undefined;
+  const capturePositions = isRecord(design.capturePositions)
+    ? (design.capturePositions as Record<string, unknown>)
+    : undefined;
   for (const scene of config.scenes) {
     if (copy?.[scene.id]?.headline) scene.headline = { ...scene.headline, ...copy[scene.id]!.headline };
     if (copy?.[scene.id]?.subhead) scene.subhead = { ...scene.subhead, ...copy[scene.id]!.subhead };
@@ -495,6 +508,31 @@ async function applyDesign(root: string, id: string, design: Record<string, unkn
       const nextLayout = sceneLayouts[scene.id];
       if (typeof nextLayout === "string" && nextLayout in LAYOUTS) scene.layout = nextLayout;
       else delete scene.layout;
+    }
+    if (capturePositions) {
+      const rawScene = capturePositions[scene.id];
+      const next: NonNullable<ProjectScene["capturePositions"]> = {};
+      if (isRecord(rawScene)) {
+        for (const device of config.devices) {
+          const rawDevice = rawScene[device];
+          if (!isRecord(rawDevice)) continue;
+          for (const locale of config.locales) {
+            const rawLocale = rawDevice[locale];
+            if (!isRecord(rawLocale)) continue;
+            const slots: NonNullable<ProjectScene["capturePositions"]>[string][string] = {};
+            for (const slot of ["primary", "secondary"] as const) {
+              if (isCapturePosition(rawLocale[slot])) {
+                slots[slot] = { x: rawLocale[slot].x, y: rawLocale[slot].y };
+              }
+            }
+            if (Object.keys(slots).length > 0) {
+              (next[device] ??= {})[locale] = slots;
+            }
+          }
+        }
+      }
+      if (Object.keys(next).length > 0) scene.capturePositions = next;
+      else delete scene.capturePositions;
     }
   }
   if (Array.isArray(design.order)) {
@@ -517,6 +555,11 @@ async function projectDesign(root: string, id: string) {
     screenOnly: config.theme.screenOnly ?? false,
     sceneLayouts: Object.fromEntries(
       config.scenes.flatMap((scene) => (scene.layout ? [[scene.id, scene.layout]] : [])),
+    ),
+    capturePositions: Object.fromEntries(
+      config.scenes.flatMap((scene) =>
+        scene.capturePositions ? [[scene.id, scene.capturePositions]] : [],
+      ),
     ),
   };
 }
@@ -668,6 +711,20 @@ function checkedTarget(value: unknown, label: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isCapturePosition(value: unknown): value is { x: number; y: number } {
+  return (
+    isRecord(value) &&
+    typeof value.x === "number" &&
+    Number.isFinite(value.x) &&
+    value.x >= 0 &&
+    value.x <= 1 &&
+    typeof value.y === "number" &&
+    Number.isFinite(value.y) &&
+    value.y >= 0 &&
+    value.y <= 1
+  );
 }
 
 function isWorkspaceFrameVariant(value: unknown): value is WorkspaceFrameVariant {

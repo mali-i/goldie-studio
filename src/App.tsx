@@ -14,6 +14,8 @@ import { projectApi } from "./project-api";
 import type { ProjectSummary } from "./project";
 import {
   type BundledFont,
+  type CapturePosition,
+  type CapturePositions,
   type Design,
   type DeviceEntry,
   loadDesign,
@@ -221,10 +223,13 @@ function Loaded({
     template: initialTemplate(design, saved),
     screenOnly: saved.screenOnly ?? design.screenOnly,
     sceneLayouts: initialSceneLayouts(design, saved, knownLayout),
+    capturePositions: saved.capturePositions ?? {},
     order: initialOrder(design, saved),
   }));
-  const { background, frame, fontFamily, copy, layout, template, screenOnly, sceneLayouts, order } =
-    state;
+  const {
+    background, frame, fontFamily, copy, layout, template, screenOnly,
+    sceneLayouts, capturePositions, order,
+  } = state;
   // Each setter names its field so a burst of edits to one control (a drag
   // on the gradient picker) collapses into a single undo step.
   const field =
@@ -249,6 +254,29 @@ function Loaded({
       else delete next[sceneId];
       return { ...prev, sceneLayouts: next };
     });
+  const setCapturePosition = (
+    sceneId: string,
+    deviceKey: string,
+    localeKey: string,
+    slot: "primary" | "secondary",
+    position: CapturePosition,
+  ) =>
+    set(`capture:${sceneId}:${deviceKey}:${localeKey}:${slot}`, (prev) => ({
+      ...prev,
+      capturePositions: {
+        ...prev.capturePositions,
+        [sceneId]: {
+          ...prev.capturePositions[sceneId],
+          [deviceKey]: {
+            ...prev.capturePositions[sceneId]?.[deviceKey],
+            [localeKey]: {
+              ...prev.capturePositions[sceneId]?.[deviceKey]?.[localeKey],
+              [slot]: position,
+            },
+          },
+        },
+      },
+    }));
   const setSceneCopy = (sceneId: string, fieldName: "headline" | "subhead", text: string) =>
     set(`copy:${sceneId}:${fieldName}`, (prev) => ({
       ...prev,
@@ -285,13 +313,14 @@ function Loaded({
         layout,
         screenOnly,
         sceneLayouts,
+        capturePositions,
       }, projectId).then(
         () => setSaveError(null),
         (e: Error) => setSaveError(e.message),
       );
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts, projectId]);
+  }, [background, frame, fontFamily, copy, order, template, layout, screenOnly, sceneLayouts, capturePositions, projectId]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -390,6 +419,8 @@ function Loaded({
                 screenOnly={screenOnly}
                 sceneLayouts={sceneLayouts}
                 onSceneLayout={setSceneLayout}
+                capturePositions={capturePositions}
+                onCapturePosition={setCapturePosition}
               />
             </div>
           ) : spec ? (
@@ -425,6 +456,7 @@ type DesignState = {
   screenOnly: boolean;
   /** Per-scene layout overrides; a scene absent here follows `layout`. */
   sceneLayouts: Record<string, string>;
+  capturePositions: CapturePositions;
   /** Screenshot scene ids as arranged by dragging tiles; empty means the config's order. */
   order: string[];
 };

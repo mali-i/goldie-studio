@@ -3,6 +3,7 @@ import { AnimatePresence, Reorder } from "motion/react";
 import type React from "react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { CENTER_CAPTURE_POSITION, dragCapturePosition } from "../lib/capturePosition";
 import {
   BADGE,
   type Composition,
@@ -16,6 +17,8 @@ import {
   SCREEN_SHADOW,
 } from "../lib/layouts";
 import type {
+  CapturePosition,
+  CapturePositions,
   Decoration,
   Design,
   DesignScene,
@@ -88,6 +91,8 @@ export function Strip({
   screenOnly,
   sceneLayouts,
   onSceneLayout,
+  capturePositions,
+  onCapturePosition,
 }: {
   design: Design;
   captures: DeviceCaptures;
@@ -108,6 +113,14 @@ export function Strip({
   screenOnly: boolean;
   sceneLayouts: Record<string, string>;
   onSceneLayout: (sceneId: string, key: string | undefined) => void;
+  capturePositions: CapturePositions;
+  onCapturePosition: (
+    sceneId: string,
+    device: string,
+    locale: string,
+    slot: "primary" | "secondary",
+    position: CapturePosition,
+  ) => void;
 }) {
   const theme = design.theme;
   const scenes =
@@ -196,6 +209,8 @@ export function Strip({
     editable: boolean;
     /** Empty screen slots stay on the canvas but must not become exported store art. */
     exportable: boolean;
+    /** At least one uploaded capture can be repositioned in the lightbox. */
+    repositionable: boolean;
     /** The composition; editable renders the copy as editable text (lightbox only). */
     scene: (editable: boolean) => ReactNode;
     /** Set on screenshot tiles, which can be dragged into a new order. */
@@ -221,6 +236,7 @@ export function Strip({
       badReason: "Clips sum outside the 15-30s Apple allows for previews.",
       editable: false,
       exportable: false,
+      repositionable: false,
       scene: () => <PreviewScene segments={segments} />,
     });
   }
@@ -245,6 +261,9 @@ export function Strip({
     };
     const needsSecondary = spec.devices.some((device) => device.capture === "secondary");
     const exportable = Boolean(primary && (!needsSecondary || secondary));
+    const presentation = tileSpec.screenshot.width > tileSpec.screenshot.height
+      ? LANDSCAPE_LAYOUTS[spec.key].capturePresentation
+      : spec.capturePresentation;
     for (let slice = 0; slice < spec.span; slice++) {
       entries.push({
         key: spec.span > 1 ? `${scene.id}#${slice + 1}` : scene.id,
@@ -258,6 +277,7 @@ export function Strip({
             : undefined,
         editable: true,
         exportable,
+        repositionable: Boolean(primary || secondary) && presentation?.objectFit !== "contain",
         // Only the first slice drags; the second follows it.
         sceneId: slice === 0 ? scene.id : undefined,
         layout: layoutControl,
@@ -279,6 +299,10 @@ export function Strip({
             sceneId={scene.id}
             captureUrl={primary?.url}
             secondCaptureUrl={secondary?.url}
+            capturePositions={capturePositions[scene.id]?.[tileSpec.key]?.[locale]}
+            onCapturePosition={editable
+              ? (slot, position) => onCapturePosition(scene.id, tileSpec.key, locale, slot, position)
+              : undefined}
             decorations={[...design.decorations, ...(scene.decorations ?? [])]}
             locale={locale}
             onEdit={editable ? (field, text) => onCopy(scene.id, field, text) : undefined}
@@ -518,6 +542,7 @@ function Lightbox({
     width: number;
     height: number;
     editable: boolean;
+    repositionable: boolean;
     scene: (editable: boolean) => ReactNode;
     layout?: {
       value: string | undefined;
@@ -572,6 +597,7 @@ function Lightbox({
         {entry.scene(true)}
       </div>
       <div className="flex items-center gap-3 text-[11px] text-neutral-300">
+        {entry.repositionable ? <span>Drag a screenshot to adjust its crop.</span> : null}
         {entry.layout ? (
           <div className="dark w-44 text-foreground">
             <Select
@@ -712,6 +738,8 @@ function ScreenshotScene({
   sceneId,
   captureUrl,
   secondCaptureUrl,
+  capturePositions,
+  onCapturePosition,
   decorations,
   locale,
   onEdit,
@@ -733,6 +761,8 @@ function ScreenshotScene({
   sceneId: string;
   captureUrl: string | undefined;
   secondCaptureUrl: string | undefined;
+  capturePositions?: Partial<Record<"primary" | "secondary", CapturePosition>>;
+  onCapturePosition?: (slot: "primary" | "secondary", position: CapturePosition) => void;
   decorations: Decoration[];
   locale: string;
   onEdit?: (field: "headline" | "subhead", text: string) => void;
@@ -823,6 +853,10 @@ function ScreenshotScene({
               frameUrl={screenOnly || capturePresentation ? null : frameUrl}
               capturePresentation={capturePresentation}
               captureUrl={url}
+              capturePosition={capturePositions?.[device.capture]}
+              onCapturePosition={onCapturePosition
+                ? (position) => onCapturePosition(device.capture, position)
+                : undefined}
               missing={
                 url ? undefined : `${sceneId} / Screen ${device.capture === "secondary" ? 2 : 1}`
               }
@@ -845,6 +879,8 @@ function DeviceView({
   frameUrl,
   capturePresentation,
   captureUrl,
+  capturePosition,
+  onCapturePosition,
   missing,
 }: {
   device: Composition["devices"][number];
@@ -852,11 +888,91 @@ function DeviceView({
   frameUrl: string | null;
   capturePresentation: LayoutSpec["capturePresentation"];
   captureUrl: string | undefined;
+  capturePosition?: CapturePosition;
+  onCapturePosition?: (position: CapturePosition) => void;
   /** Scene id to name in the placeholder when the capture is missing. */
   missing: string | undefined;
 }) {
   const { w, h } = cq(tile);
   const { frame, screen } = device;
+  const savedPosition = capturePosition ?? (
+    capturePresentation?.objectPosition === "top center"
+      ? { x: 0.5, y: 0 }
+      : CENTER_CAPTURE_POSITION
+  );
+  const [position, setPosition] = useState(savedPosition);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const drag = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    start: CapturePosition;
+    current: CapturePosition;
+    viewport: { width: number; height: number };
+    image: { width: number; height: number };
+  } | null>(null);
+  useEffect(() => {
+    if (!drag.current) setPosition(savedPosition);
+  }, [savedPosition.x, savedPosition.y, captureUrl]);
+  const canDrag = Boolean(
+    onCapturePosition && captureUrl && capturePresentation?.objectFit !== "contain",
+  );
+  const displayPosition = onCapturePosition ? position : savedPosition;
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canDrag || event.button !== 0 || !imageRef.current?.naturalWidth) return;
+    const viewport = {
+      width: event.currentTarget.clientWidth,
+      height: event.currentTarget.clientHeight,
+    };
+    const image = {
+      width: imageRef.current.naturalWidth,
+      height: imageRef.current.naturalHeight,
+    };
+    drag.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      start: position,
+      current: position,
+      viewport,
+      image,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    // The device box may be rotated; convert the pointer motion to its local axes.
+    const radians = (device.rotate * Math.PI) / 180;
+    const dx = event.clientX - current.clientX;
+    const dy = event.clientY - current.clientY;
+    const next = dragCapturePosition(
+      current.start,
+      {
+        x: Math.cos(radians) * dx + Math.sin(radians) * dy,
+        y: -Math.sin(radians) * dx + Math.cos(radians) * dy,
+      },
+      current.viewport,
+      current.image,
+    );
+    current.current = next;
+    setPosition(next);
+    event.preventDefault();
+  };
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (current.current.x !== current.start.x || current.current.y !== current.start.y) {
+      onCapturePosition?.(current.current);
+    }
+    event.stopPropagation();
+  };
   // The screen as fractions of the device box, so it rotates with it.
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
@@ -879,6 +995,9 @@ function DeviceView({
           height: pct(screen.height, frame.height),
           borderRadius: w(screen.radius),
           overflow: "hidden",
+          cursor: canDrag ? "grab" : undefined,
+          touchAction: canDrag ? "none" : undefined,
+          userSelect: canDrag ? "none" : undefined,
           background: capturePresentation ? "#fff" : "#000",
           border: capturePresentation ? `${w(tile.width * 0.0008)} solid rgba(144, 162, 195, 0.24)` : undefined,
           boxShadow: capturePresentation
@@ -887,9 +1006,18 @@ function DeviceView({
               ? undefined
               : `0 ${w(tile.width * SCREEN_SHADOW.offsetY)} ${w(tile.width * SCREEN_SHADOW.blur)} ${SCREEN_SHADOW.color}`,
         }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={(event) => {
+          if (drag.current?.pointerId !== event.pointerId) return;
+          drag.current = null;
+          setPosition(savedPosition);
+        }}
       >
         {captureUrl ? (
           <img
+            ref={imageRef}
             src={`/${captureUrl}`}
             alt=""
             draggable={false}
@@ -897,8 +1025,9 @@ function DeviceView({
               width: "100%",
               height: "100%",
               objectFit: capturePresentation?.objectFit ?? "cover",
-              objectPosition: capturePresentation?.objectPosition ?? "center",
+              objectPosition: `${displayPosition.x * 100}% ${displayPosition.y * 100}%`,
               display: "block",
+              pointerEvents: canDrag ? "none" : undefined,
             }}
           />
         ) : (
@@ -915,7 +1044,9 @@ function DeviceView({
           src={`/${frameUrl}`}
           alt=""
           draggable={false}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none",
+          }}
         />
       ) : null}
     </div>

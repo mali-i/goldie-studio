@@ -172,7 +172,17 @@ export type SavedDesign = {
   screenOnly?: boolean;
   /** Layout overrides per screenshot scene id. */
   sceneLayouts?: Record<string, string>;
+  /** Crop positions by scene, device, locale, and screenshot slot. */
+  capturePositions?: CapturePositions;
 };
+
+/** 0 is left/top, 0.5 is centered, and 1 is right/bottom. */
+export type CapturePosition = { x: number; y: number };
+export type CapturePositionsByDevice = Record<
+  string,
+  Record<string, Partial<Record<"primary" | "secondary", CapturePosition>>>
+>;
+export type CapturePositions = Record<string, CapturePositionsByDevice>;
 
 export type SceneCopy = {
   headline?: Record<string, string>;

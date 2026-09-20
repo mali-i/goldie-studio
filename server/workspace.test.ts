@@ -175,6 +175,31 @@ describe("workspace projects", () => {
     expect(manifest.design.captures["mac-2880x1800"]?.screenshots).toHaveLength(1);
   });
 
+  test("persists independent crop positions for both screenshot slots", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const project = await workspaceService.createProject(root, "Crop Positions");
+    const capturePositions = {
+      "scene-1": {
+        "iphone-6.9": {
+          "en-US": {
+            primary: { x: 0.2, y: 0.5 },
+            secondary: { x: 0.8, y: 0.5 },
+          },
+        },
+      },
+    };
+    await workspaceService.applyDesign(root, project.project.id, { capturePositions });
+    expect((await workspaceService.projectDesign(root, project.project.id)).capturePositions)
+      .toEqual(capturePositions);
+    expect((await workspaceService.readProject(root, project.project.id)).config.scenes[0]?.capturePositions)
+      .toEqual(capturePositions["scene-1"]);
+
+    await workspaceService.applyDesign(root, project.project.id, { capturePositions: {} });
+    expect((await workspaceService.projectDesign(root, project.project.id)).capturePositions)
+      .toEqual({});
+  });
+
   test("migrates the removed classic SVG frame to a real PNG variant", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);
