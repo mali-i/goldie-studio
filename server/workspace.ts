@@ -841,14 +841,14 @@ function deviceSpec(key: string) {
       label: "iPad 12.9",
       platform: "ipados",
       simulatorName: null,
-      screenshot: { width: 2048, height: 2732 },
+      screenshot: { width: 2732, height: 2048 },
       preview: null,
       frame: {
         url: "frames/ipad-12.9.svg",
         geom: {
-          width: 2200,
-          height: 2884,
-          screen: { x: 76, y: 76, width: 2048, height: 2732 },
+          width: 2884,
+          height: 2200,
+          screen: { x: 76, y: 76, width: 2732, height: 2048 },
           screenRadius: 24,
         },
       },

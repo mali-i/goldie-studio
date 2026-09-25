@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="2884" viewBox="0 0 2200 2884">
-  <path fill="#1c1c1e" fill-rule="evenodd" d="M110 0h1980a110 110 0 0 1 110 110v2664a110 110 0 0 1-110 110H110A110 110 0 0 1 0 2774V110A110 110 0 0 1 110 0Zm-10 76a24 24 0 0 0-24 24v2684a24 24 0 0 0 24 24h2000a24 24 0 0 0 24-24V100a24 24 0 0 0-24-24H100Z"/>
-  <circle cx="1100" cy="38" r="10" fill="#38383b"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="2884" height="2200" viewBox="0 0 2884 2200">
+  <g transform="translate(2884 0) rotate(90)">
+    <path fill="#1c1c1e" fill-rule="evenodd" d="M110 0h1980a110 110 0 0 1 110 110v2664a110 110 0 0 1-110 110H110A110 110 0 0 1 0 2774V110A110 110 0 0 1 110 0Zm-10 76a24 24 0 0 0-24 24v2684a24 24 0 0 0 24 24h2000a24 24 0 0 0 24-24V100a24 24 0 0 0-24-24H100Z"/>
+    <circle cx="1100" cy="38" r="10" fill="#38383b"/>
+  </g>
 </svg>

@@ -89,7 +89,13 @@ describe("workspace projects", () => {
     const manifest = await workspaceService.projectManifest(root, project.project.id);
     expect(manifest.design.captures["iphone-6.9"]?.screenshots).toHaveLength(1);
     expect(manifest.devices.find((device) => device.key === "ipad-12.9")?.screenshot)
-      .toEqual({ width: 2048, height: 2732 });
+      .toEqual({ width: 2732, height: 2048 });
+    expect(manifest.devices.find((device) => device.key === "ipad-12.9")?.frame?.geom)
+      .toMatchObject({
+        width: 2884,
+        height: 2200,
+        screen: { x: 76, y: 76, width: 2732, height: 2048 },
+      });
   });
 
   test("keeps uploaded screenshots and config changes isolated", async () => {
