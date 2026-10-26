@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, DownloadIcon, Loader2Icon, X } from "lucide-react";
-import { AnimatePresence, Reorder } from "motion/react";
+import { Reorder } from "motion/react";
 import type React from "react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -35,10 +35,8 @@ import { CHECKERBOARD, layoutOptions, TRANSPARENT } from "./DesignPanel";
 import { Select } from "./Sidebar";
 import { Button } from "./ui/button";
 
-/** Tiles shown at once; the App Store product page shows this many before scrolling. */
-const PAGE_SIZE = 5;
-/** Apple's cap on screenshots per device family. */
-const MAX_SCREENSHOTS = 10;
+/** Reference tile size; additional tiles extend across the infinite canvas. */
+const REFERENCE_COLUMNS = 5;
 type Slot = "primary" | "secondary";
 type SlotEditorState = {
   mode: "image" | "slot";
@@ -47,26 +45,14 @@ type SlotEditorState = {
 };
 
 /**
- * Page-turn animation: the incoming page slides in from the side the arrow
- * points at while the outgoing page leaves through the opposite edge. 110%
- * keeps a page's tile shadows clear of the clip edge until it is in motion.
- */
-const pageSlide = {
-  enter: (direction: number) => ({ x: direction > 0 ? "110%" : "-110%" }),
-  center: { x: "0%" },
-  exit: (direction: number) => ({ x: direction > 0 ? "-110%" : "110%" }),
-};
-
-/**
- * The five-up strip, composited in the browser: each screenshot tile is the
+ * The continuous strip, composited in the browser: each screenshot tile is the
  * raw device capture inside the bezel art on the chosen background, laid out
  * with the same geometry used by full-resolution browser export. Background
  * and frame arrive as props from React state and repaint instantly. The preview tile
  * plays the raw clips as they are: Apple requires a plain screen recording.
  *
- * The App Store allows up to ten screenshots; the strip shows five tiles at a
- * time, and when there are more, arrows page through them like the store's
- * own carousel. Scenes past the tenth are dropped with a note.
+ * Every scene stays on the canvas. Extra tiles extend the row at a consistent
+ * size and remain accessible through canvas panning and zooming.
  *
  * Every tile is a size-container: the geometry is computed in the device's
  * spec pixels and expressed in cqw/cqh, so the tile is the composition scaled
@@ -192,17 +178,9 @@ export function Strip({
 
   // Scenes are the stable units of the strip. Captures merely fill one of
   // their two screen slots, so an empty scene remains visible and editable.
-  const allShots = scenes.map((scene) => ({ scene }));
   const legacyCaptures =
     captures.screenshots.length > 0 &&
     captures.screenshots.every((shot) => shot.slot === undefined);
-  // Apple's cap counts tiles, so a panorama scene uses two of the ten.
-  let used = 0;
-  const shots = allShots.filter(({ scene }) => {
-    used += layoutOf(scene).layout.span;
-    return used <= MAX_SCREENSHOTS;
-  });
-  const dropped = allShots.length - shots.length;
 
   const segments =
     design.preview && captures.clips
@@ -266,7 +244,7 @@ export function Strip({
       scene: () => <PreviewScene segments={segments} />,
     });
   }
-  for (const { scene } of shots) {
+  for (const scene of scenes) {
     const { layout: spec, secondScene } = layoutOf(scene);
     const primary = captures.screenshots.find(
       (s) => s.sceneId === scene.id && (s.slot ?? "primary") === "primary",
@@ -418,8 +396,7 @@ export function Strip({
   };
 
   // Strip cells: the preview tile, then one cell per scene holding its
-  // tile(s), so a panorama's two slices drag together. Cells are paged so a
-  // page holds at most PAGE_SIZE tiles without splitting a scene.
+  // tile(s), so a panorama's two slices drag together.
   type Cell = { sceneId?: string; tiles: number[] };
   const cells: Cell[] = [];
   entries.forEach((entry, i) => {
@@ -430,26 +407,6 @@ export function Strip({
       cells.push({ sceneId: entry.sceneId, tiles: [i] });
     }
   });
-  const pageCells: Cell[][] = [[]];
-  for (const cell of cells) {
-    const current = pageCells[pageCells.length - 1];
-    const used = current.reduce((n, c) => n + c.tiles.length, 0);
-    if (used + cell.tiles.length > PAGE_SIZE && current.length > 0) pageCells.push([cell]);
-    else current.push(cell);
-  }
-  const pages = pageCells.length;
-  const [page, setPage] = useState(0);
-  // Which way the last page turn went, so the incoming page slides in from
-  // that side and the outgoing one leaves through the other.
-  const [direction, setDirection] = useState(0);
-  const turnPage = (delta: number) => {
-    setDirection(delta);
-    setPage((p) => p + delta);
-  };
-  // A device switch can shrink the tile count; keep the page in range.
-  useEffect(() => {
-    if (page > pages - 1) setPage(pages - 1);
-  }, [page, pages]);
   useEffect(() => {
     if (open !== null && open > entries.length - 1) {
       setOpenState(null);
@@ -459,15 +416,12 @@ export function Strip({
 
   if (entries.length === 0) return null;
 
-  const visible = pageCells[Math.min(page, pages - 1)];
-  const visibleIds = visible.flatMap((c) => (c.sceneId ? [c.sceneId] : []));
-  // Pad the last page so tiles keep the same width as on a full page.
-  const columns = pages > 1 ? PAGE_SIZE : entries.length;
-  // The page's scenes in their new order, spliced back into the full order.
-  const reorderPage = (ids: string[]) => {
-    const queue = [...ids];
-    onReorder(scenes.map((s) => (visibleIds.includes(s.id) ? queue.shift()! : s.id)));
-  };
+  const sceneIds = cells.flatMap((cell) => cell.sceneId ? [cell.sceneId] : []);
+  const columns = entries.length;
+  // Keep the five-column reference tile width, including the 16px gaps.
+  const rowWidth = columns > REFERENCE_COLUMNS
+    ? `calc(100% * ${columns / REFERENCE_COLUMNS} + ${16 * (columns / REFERENCE_COLUMNS - 1)}px)`
+    : "100%";
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -486,84 +440,44 @@ export function Strip({
             </div>
           ))}
       </div>
-      <div className="relative">
-        {/* Clips only horizontally, so a sliding page vanishes at the strip's
-            edge while tile shadows and the hover lift stay visible; the small
-            padding keeps the edge tiles' own shadows out of the clip. */}
-        <div className="-mx-2 overflow-x-clip px-2">
-          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-            <Reorder.Group
-              key={page}
-              axis="x"
-              values={visibleIds}
-              onReorder={reorderPage}
-              aria-label="Screenshots, drag to reorder"
-              className="grid w-full list-none items-start gap-4 p-0"
-              style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-              custom={direction}
-              variants={pageSlide}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: "tween", duration: 0.25, ease: "easeInOut" }}
+      <Reorder.Group
+        axis="x"
+        values={sceneIds}
+        onReorder={onReorder}
+        aria-label="Screenshots, drag to reorder"
+        className="grid w-full list-none items-start gap-4 p-0"
+        style={{ width: rowWidth, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
+        {cells.map((cell) =>
+          cell.sceneId ? (
+            <Reorder.Item
+              key={cell.sceneId}
+              value={cell.sceneId}
+              className="relative grid gap-4"
+              style={{
+                zIndex: lifting === cell.sceneId ? 10 : undefined,
+                gridColumn: `span ${cell.tiles.length}`,
+                gridTemplateColumns: `repeat(${cell.tiles.length}, minmax(0, 1fr))`,
+              }}
+              animate={{ scale: lifting === cell.sceneId ? 1.04 : 1 }}
+              onDragStart={() => {
+                dragged.current = true;
+                setLifting(cell.sceneId ?? null);
+              }}
+              onDragEnd={() => {
+                setLifting(null);
+                setTimeout(() => {
+                  dragged.current = false;
+                }, 0);
+              }}
             >
-              {visible.map((cell) =>
-                cell.sceneId ? (
-                  <Reorder.Item
-                    key={cell.sceneId}
-                    value={cell.sceneId}
-                    className="relative grid gap-4"
-                    style={{
-                      zIndex: lifting === cell.sceneId ? 10 : undefined,
-                      gridColumn: `span ${cell.tiles.length}`,
-                      gridTemplateColumns: `repeat(${cell.tiles.length}, minmax(0, 1fr))`,
-                    }}
-                    animate={{ scale: lifting === cell.sceneId ? 1.04 : 1 }}
-                    onDragStart={() => {
-                      dragged.current = true;
-                      setLifting(cell.sceneId ?? null);
-                    }}
-                    onDragEnd={() => {
-                      setLifting(null);
-                      setTimeout(() => {
-                        dragged.current = false;
-                      }, 0);
-                    }}
-                  >
-                    {cell.tiles.map(tileAt)}
-                  </Reorder.Item>
-                ) : (
-                  <li key={entries[cell.tiles[0]].key}>{tileAt(cell.tiles[0])}</li>
-                ),
-              )}
-            </Reorder.Group>
-          </AnimatePresence>
-        </div>
-
-        {pages > 1 ? (
-          <>
-            <PagerButton
-              side="left"
-              label="Previous screenshots"
-              disabled={page === 0}
-              onClick={() => turnPage(-1)}
-            />
-            <PagerButton
-              side="right"
-              label="Next screenshots"
-              disabled={page === pages - 1}
-              onClick={() => turnPage(1)}
-            />
-          </>
-        ) : null}
-      </div>
-
-      {dropped > 0 ? (
-        <p className="text-center text-[11px] font-medium text-destructive">
-          {dropped} more scene{dropped === 1 ? "" : "s"} hidden: the App Store allows{" "}
-          {MAX_SCREENSHOTS} screenshots.
-        </p>
-      ) : null}
+              {cell.tiles.map(tileAt)}
+            </Reorder.Item>
+          ) : (
+            <li key={entries[cell.tiles[0]].key}>{tileAt(cell.tiles[0])}</li>
+          ),
+        )}
+      </Reorder.Group>
 
       {open !== null && entries[open] ? (
         <Lightbox
