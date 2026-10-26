@@ -8,10 +8,12 @@ export function PreviewCanvas({
   children,
   label,
   enabled,
+  toolbarActions,
 }: {
   children: ReactNode;
   label?: string;
   enabled: boolean;
+  toolbarActions?: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -59,10 +61,11 @@ export function PreviewCanvas({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-10 py-3">
-        <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 px-6">
+        <p className="min-w-0 truncate text-xs text-muted-foreground">{label}</p>
+        <div className="flex shrink-0 items-center gap-2">
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon-sm"
           aria-label="Reset canvas view"
           title="Center canvas and reset zoom"
@@ -71,6 +74,11 @@ export function PreviewCanvas({
         >
           <RotateCcwIcon />
         </Button>
+        {toolbarActions && <>
+          <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+          {toolbarActions}
+        </>}
+        </div>
       </div>
       <div
         ref={viewport}

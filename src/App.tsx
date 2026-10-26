@@ -1,6 +1,6 @@
 import {
   CameraIcon,
-  MessageSquareIcon,
+  PanelRightOpenIcon,
   LaptopIcon,
   type LucideIcon,
   SmartphoneIcon,
@@ -233,6 +233,7 @@ function Loaded({
   const knownLayout = (key: string | undefined) =>
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
   const [chatOpen, setChatOpen] = useState(false);
+  const chatTrigger = useRef<HTMLButtonElement>(null);
   const [chatScene, setChatScene] = useState(design.scenes[0]?.id ?? "");
   const { state, set, undo, canUndo } = useHistory<DesignState>(() => ({
     background: saved.background ?? design.theme.background,
@@ -454,12 +455,16 @@ function Loaded({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {!manifest.demo && <div className="flex justify-end px-3 pb-2">
-          <Button size="sm" variant={chatOpen ? "secondary" : "outline"} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}><MessageSquareIcon />Discuss with Codex</Button>
-        </div>}
         <PreviewCanvas
           enabled={Boolean(spec && captures && design.scenes.length > 0)}
           label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
+          toolbarActions={!manifest.demo && !chatOpen ? (
+            <Button ref={chatTrigger} size="sm" variant="outline"
+              className="h-8 gap-2 rounded-full border-sidebar-border bg-sidebar px-3.5 shadow-sm hover:bg-muted"
+              aria-expanded={false} aria-controls="codex-panel" onClick={() => setChatOpen(true)}>
+              <PanelRightOpenIcon className="size-3.5 text-muted-foreground" />Discuss with Codex
+            </Button>
+          ) : undefined}
         >
           {spec && captures && design.scenes.length > 0 ? (
             <div className="w-full">
@@ -513,7 +518,10 @@ function Loaded({
         context={{ sceneId: selectedScene?.id ?? "", device, locale, headline: chatHeadline, subhead: chatSubhead }}
         imageUrl={captures?.screenshots.find((entry) => entry.sceneId === selectedScene?.id && (entry.slot ?? "primary") === "primary")?.url}
         onScene={setChatScene}
-        onClose={() => setChatOpen(false)}
+        onClose={() => {
+          setChatOpen(false);
+          requestAnimationFrame(() => chatTrigger.current?.focus());
+        }}
         onUndo={undo}
         canUndo={canUndo}
         onApply={(sceneId, targetLocale, proposal) => {
