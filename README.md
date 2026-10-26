@@ -19,8 +19,13 @@ Git. Unsafe path characters in a project name are replaced with `-`, and a
 numeric suffix distinguishes duplicate names. Set `GOLDIE_STUDIO_WORKSPACE`
 to store projects somewhere else.
 
-## Upstream
+## Origins & acknowledgments
 
-This project is forked from
-[kacperkapusciak/goldie](https://github.com/kacperkapusciak/goldie) and has
-been refactored into a standalone, upload-first Studio.
+Goldie Studio began as a fork of
+[Goldie](https://github.com/software-mansion-labs/goldie) by Software Mansion.
+It has since evolved into an independently maintained project focused on
+uploading, editing, and exporting screenshots. The repository is no longer
+part of the original project's GitHub fork network.
+
+Thanks to the original authors and contributors for their work.
+See [LICENSE](LICENSE) for the license and attribution details.

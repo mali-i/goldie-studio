@@ -24,6 +24,7 @@ import type { Platform } from "../App";
 import type { SceneCopy, StoreManifest } from "../manifest";
 import type { ProjectSummary } from "../project";
 import { DesignPanel } from "./DesignPanel";
+import { AboutDialog } from "./AboutDialog";
 import { ExportPanel } from "./ExportPanel";
 import { LocaleSettings } from "./LocaleSettings";
 import { ProjectScreens } from "./ProjectScreens";
@@ -245,6 +246,7 @@ export function Sidebar({
               ?.screenshots.length,
           )}
         />
+        <AboutDialog />
       </footer>
     </aside>
   );
