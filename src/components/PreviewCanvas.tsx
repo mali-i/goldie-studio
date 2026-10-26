@@ -1,6 +1,6 @@
 import { RotateCcwIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { INITIAL_CAMERA, zoomCamera } from "../lib/canvasCamera";
+import { canvasMaxZoom, INITIAL_CAMERA, MAX_ZOOM, zoomCamera } from "../lib/canvasCamera";
 import { Button } from "./ui/button";
 
 /** Pan without bounds; avoid ancestor transforms so fixed lightboxes and export tiles stay independent. */
@@ -38,7 +38,16 @@ export function PreviewCanvas({
       if (event.ctrlKey || event.metaKey) {
         const rect = element.getBoundingClientRect();
         const anchor = { x: event.clientX - rect.left - rect.width / 2, y: event.clientY - rect.top - rect.height / 2 };
-        setCamera((current) => zoomCamera(current, current.zoom * Math.exp(-event.deltaY * unit * 0.01), anchor));
+        const row = element.querySelector<HTMLElement>("[data-canvas-columns]");
+        const tile = row?.querySelector<HTMLElement>("[data-canvas-tile]")?.getBoundingClientRect();
+        const maxZoom = tile && tile.height > 0
+          ? canvasMaxZoom(
+              { width: element.clientWidth, height: element.clientHeight },
+              tile.width / tile.height,
+              Number(row!.dataset.canvasColumns),
+            )
+          : MAX_ZOOM;
+        setCamera((current) => zoomCamera(current, current.zoom * Math.exp(-event.deltaY * unit * 0.01), anchor, maxZoom));
       } else {
         // Trackpad two-finger scroll supplies both axes, including inertial motion.
         setCamera((current) => ({ ...current, x: current.x - event.deltaX * unit, y: current.y - event.deltaY * unit }));

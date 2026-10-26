@@ -445,6 +445,7 @@ export function Strip({
         values={sceneIds}
         onReorder={onReorder}
         aria-label="Screenshots, drag to reorder"
+        data-canvas-columns={Math.min(columns, REFERENCE_COLUMNS)}
         className="grid w-full list-none items-start gap-4 p-0"
         style={{ width: rowWidth, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
@@ -1485,6 +1486,7 @@ function Tile({
           draggable ? "Open full-size preview (drag to reorder)" : "Open full-size preview"
         }
         title={draggable ? "Drag to reorder" : undefined}
+        data-canvas-tile={draggable ? "" : undefined}
         onClick={onOpen}
         className={`tile-shadow relative block w-full overflow-hidden rounded-2xl bg-neutral-200 ring-1 ring-black/10 transition-[transform,box-shadow,--tw-ring-color] duration-150 select-none hover:-translate-y-0.5 hover:ring-black/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none dark:bg-neutral-800 dark:ring-white/10 dark:hover:ring-white/30 ${
           draggable ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
