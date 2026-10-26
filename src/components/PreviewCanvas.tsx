@@ -1,9 +1,7 @@
-import { MinusIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { RotateCcwIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { INITIAL_CAMERA, MAX_ZOOM, MIN_ZOOM, zoomCamera } from "../lib/canvasCamera";
+import { INITIAL_CAMERA, zoomCamera } from "../lib/canvasCamera";
 import { Button } from "./ui/button";
-
-const ZOOM_STEP = 10;
 
 /** Pan without bounds; avoid ancestor transforms so fixed lightboxes and export tiles stay independent. */
 export function PreviewCanvas({
@@ -18,14 +16,8 @@ export function PreviewCanvas({
   const viewport = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [camera, setCamera] = useState(INITIAL_CAMERA);
-  const zoom = Math.round(camera.zoom);
   const drag = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [panning, setPanning] = useState(false);
-  const changeZoom = (value: number | ((current: number) => number)) => {
-    setCamera((current) => zoomCamera(current,
-      typeof value === "function" ? value(current.zoom) : value,
-    ));
-  };
 
   useEffect(() => {
     const element = viewport.current;
@@ -60,33 +52,16 @@ export function PreviewCanvas({
     <main className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-10 py-3">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <div className="flex items-center gap-1 rounded-xl border bg-background p-1 shadow-sm" role="group" aria-label="Preview zoom">
-          <Button variant="ghost" size="icon-sm" aria-label="Zoom out" title="Zoom out" disabled={!enabled || zoom <= MIN_ZOOM} onClick={() => changeZoom((current) => current - ZOOM_STEP)}>
-            <MinusIcon />
-          </Button>
-          <input
-            type="range"
-            min={MIN_ZOOM}
-            max={MAX_ZOOM}
-            step={1}
-            value={zoom}
-            disabled={!enabled}
-            onChange={(event) => changeZoom(Number(event.target.value))}
-            aria-label="Preview zoom percentage"
-            aria-valuetext={`${zoom}%`}
-            className="mx-1 w-24 accent-primary disabled:opacity-50"
-          />
-          <Button variant="ghost" size="sm" className="w-14 tabular-nums" disabled={!enabled} title="Reset zoom to 100%" aria-label={`Zoom ${zoom}%, reset to 100%`} onClick={() => changeZoom(100)}>
-            {zoom}%
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Zoom in" title="Zoom in" disabled={!enabled || zoom >= MAX_ZOOM} onClick={() => changeZoom((current) => current + ZOOM_STEP)}>
-            <PlusIcon />
-          </Button>
-          <div className="mx-1 h-4 w-px bg-border" />
-          <Button variant="ghost" size="icon-sm" aria-label="Reset preview zoom" title="Center canvas and reset zoom" disabled={!enabled || (camera.zoom === 100 && camera.x === 0 && camera.y === 0)} onClick={() => setCamera(INITIAL_CAMERA)}>
-            <RotateCcwIcon />
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Reset canvas view"
+          title="Center canvas and reset zoom"
+          disabled={!enabled || (camera.zoom === 100 && camera.x === 0 && camera.y === 0)}
+          onClick={() => setCamera(INITIAL_CAMERA)}
+        >
+          <RotateCcwIcon />
+        </Button>
       </div>
       <div
         ref={viewport}
