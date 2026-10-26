@@ -79,6 +79,7 @@ export function Strip({
   fontFamily,
   copy,
   onCopy,
+  onSceneSelect,
   order,
   onReorder,
   template,
@@ -100,6 +101,7 @@ export function Strip({
   fontFamily: string;
   copy: Record<string, SceneCopy>;
   onCopy: (sceneId: string, field: "headline" | "subhead", text: string) => void;
+  onSceneSelect?: (sceneId: string) => void;
   /** Screenshot scene ids in display order; empty means the config's order. */
   order: string[];
   onReorder: (order: string[]) => void;
@@ -357,6 +359,7 @@ export function Strip({
   // synchronously first, and only cleared once the closing morph is done.
   const [named, setNamed] = useState<number | null>(null);
   const setOpen = (next: number | null) => {
+    if (next !== null && entries[next]?.sceneId) onSceneSelect?.(entries[next].sceneId!);
     if (typeof document.startViewTransition !== "function") {
       setNamed(next);
       setOpenState(next);
@@ -491,6 +494,7 @@ export function Strip({
           onStep={(delta) => {
             if (open === null) return;
             const next = Math.min(entries.length - 1, Math.max(0, open + delta));
+            if (entries[next]?.sceneId) onSceneSelect?.(entries[next].sceneId!);
             setNamed(next);
             setOpenState(next);
           }}

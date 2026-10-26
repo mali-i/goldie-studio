@@ -12,6 +12,7 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Plugin } from "vite";
+import { StudioCodex } from "./codex";
 import { isLayoutKey, isTemplateKey, LAYOUTS, resolveScenes, TEMPLATES } from "../src/lib/layouts";
 import {
   DEFAULT_DEVICE_BY_PLATFORM,
@@ -35,19 +36,23 @@ const MAX_BODY_BYTES = 35 * 1024 * 1024;
 type Next = (err?: unknown) => void;
 
 export function workspacePlugin(workspaceRoot: string): Plugin {
-  const handler = createHandler(resolve(workspaceRoot));
+  const codex = new StudioCodex();
+  const handler = createHandler(resolve(workspaceRoot), codex);
   return {
     name: "goldie-workspace",
     configureServer(server) {
       server.middlewares.use(handler);
+      server.httpServer?.once("close", () => codex.close());
     },
     configurePreviewServer(server) {
       server.middlewares.use(handler);
+      server.httpServer?.once("close", () => codex.close());
     },
+    closeBundle() { codex.close(); },
   };
 }
 
-function createHandler(root: string) {
+function createHandler(root: string, codex: StudioCodex) {
   return async (req: IncomingMessage, res: ServerResponse, next: Next) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/projects")) return next();
@@ -71,6 +76,9 @@ function createHandler(root: string) {
       }
 
       const action = parts[3];
+      if (action === "codex") {
+        return await codex.handle(req, res, projectDir(root, id), await readProject(root, id), parts[4], () => readJson(req));
+      }
       if (action === "manifest" && req.method === "GET") {
         return sendJson(res, await projectManifest(root, id));
       }

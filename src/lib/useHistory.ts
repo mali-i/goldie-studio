@@ -61,7 +61,7 @@ export function useHistory<T>(initial: () => T) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
-  return { state, set, undo, redo };
+  return { state, set, undo, redo, canUndo: past.current.length > 0 };
 }
 
 function isTextTarget(target: EventTarget | null): boolean {

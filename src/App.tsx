@@ -1,5 +1,6 @@
 import {
   CameraIcon,
+  MessageSquareIcon,
   LaptopIcon,
   type LucideIcon,
   SmartphoneIcon,
@@ -8,6 +9,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
+import { CodexPanel } from "./components/CodexPanel";
+import { Button } from "./components/ui/button";
 import { PreviewCanvas } from "./components/PreviewCanvas";
 import { Sidebar } from "./components/Sidebar";
 import { Strip } from "./components/Strip";
@@ -229,7 +232,9 @@ function Loaded({
   };
   const knownLayout = (key: string | undefined) =>
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
-  const { state, set } = useHistory<DesignState>(() => ({
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatScene, setChatScene] = useState(design.scenes[0]?.id ?? "");
+  const { state, set, undo, canUndo } = useHistory<DesignState>(() => ({
     background: saved.background ?? design.theme.background,
     frame:
       saved.frame && design.frameVariants.includes(saved.frame)
@@ -403,9 +408,12 @@ function Loaded({
     : frame
       ? (design.frameAssets?.[frame] ?? `frames/${frame}.png`)
       : (design.customFrameUrl ?? `frames/${design.frameVariants[0]}.png`);
+  const selectedScene = design.scenes.find((scene) => scene.id === chatScene) ?? design.scenes[0];
+  const chatHeadline = selectedScene ? (copy[selectedScene.id]?.headline?.[locale] ?? selectedScene.headline[locale] ?? "") : "";
+  const chatSubhead = selectedScene ? (copy[selectedScene.id]?.subhead?.[locale] ?? selectedScene.subhead?.[locale] ?? "") : "";
 
   return (
-    <div className="flex h-full bg-stage p-3 text-foreground">
+    <div className={`flex h-full bg-stage p-3 text-foreground ${chatOpen ? "[&>aside:first-child]:hidden xl:[&>aside:first-child]:flex" : ""}`}>
       <Sidebar
         projectId={projectId}
         projects={projects}
@@ -446,6 +454,9 @@ function Loaded({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {!manifest.demo && <div className="flex justify-end px-3 pb-2">
+          <Button size="sm" variant={chatOpen ? "secondary" : "outline"} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}><MessageSquareIcon />Discuss with Codex</Button>
+        </div>}
         <PreviewCanvas
           enabled={Boolean(spec && captures && design.scenes.length > 0)}
           label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
@@ -462,6 +473,7 @@ function Loaded({
                 fontFamily={previewFontFamily}
                 copy={copy}
                 onCopy={setSceneCopy}
+                onSceneSelect={setChatScene}
                 order={order}
                 onReorder={setOrder}
                 template={
@@ -494,6 +506,25 @@ function Loaded({
           )}
         </PreviewCanvas>
       </div>
+
+      {chatOpen && !manifest.demo && <CodexPanel
+        projectId={projectId}
+        scenes={design.scenes}
+        context={{ sceneId: selectedScene?.id ?? "", device, locale, headline: chatHeadline, subhead: chatSubhead }}
+        imageUrl={captures?.screenshots.find((entry) => entry.sceneId === selectedScene?.id && (entry.slot ?? "primary") === "primary")?.url}
+        onScene={setChatScene}
+        onClose={() => setChatOpen(false)}
+        onUndo={undo}
+        canUndo={canUndo}
+        onApply={(sceneId, targetLocale, proposal) => {
+          if (!design.scenes.some((scene) => scene.id === sceneId) || !manifest.locales.includes(targetLocale)) return;
+          set(`codex:${crypto.randomUUID()}`, (prev) => ({ ...prev, copy: { ...prev.copy, [sceneId]: {
+            ...prev.copy[sceneId],
+            headline: { ...prev.copy[sceneId]?.headline, [targetLocale]: proposal.headline },
+            subhead: { ...prev.copy[sceneId]?.subhead, [targetLocale]: proposal.subhead },
+          } } }));
+        }}
+      />}
 
       {saveError ? <Toast message={`Could not save design: ${saveError}`} /> : null}
     </div>
