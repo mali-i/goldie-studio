@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
+import { PreviewCanvas } from "./components/PreviewCanvas";
 import { Sidebar } from "./components/Sidebar";
 import { Strip } from "./components/Strip";
 import { useHistory } from "./lib/useHistory";
@@ -445,14 +446,12 @@ function Loaded({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="relative grid flex-1 place-items-center overflow-auto p-10">
-          {spec ? (
-            <div className="absolute top-5 left-10 text-xs text-muted-foreground">
-              Media Size: {spec.screenshot.width} × {spec.screenshot.height}
-            </div>
-          ) : null}
+        <PreviewCanvas
+          enabled={Boolean(spec && captures && design.scenes.length > 0)}
+          label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
+        >
           {spec && captures && design.scenes.length > 0 ? (
-            <div className="w-full max-w-[1400px]">
+            <div className="w-full">
               <Strip
                 design={design}
                 captures={captures}
@@ -493,7 +492,7 @@ function Loaded({
           ) : (
             <EmptyState {...ENABLE_PLATFORM[platform]} />
           )}
-        </main>
+        </PreviewCanvas>
       </div>
 
       {saveError ? <Toast message={`Could not save design: ${saveError}`} /> : null}
