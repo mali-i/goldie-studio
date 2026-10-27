@@ -10,7 +10,7 @@ export type ChatMessage = {
   status?: "completed" | "interrupted" | "failed";
   proposal?: CopyProposal | null;
 };
-export type CodexProject = { appRoot: string | null; threadId?: string; messages: ChatMessage[] };
+export type CodexProject = { appRoot: string | null; lastAppRoot?: string; threadId?: string; messages: ChatMessage[] };
 export type CodexStatus = { available: boolean; authenticated: boolean; account: string; error?: string };
 export type ChatInput = {
   message: string;

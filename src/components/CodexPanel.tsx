@@ -174,8 +174,8 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           <button type="button" className="flex w-full items-center gap-2.5 p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => setSettings(!settings)} aria-expanded={settings} aria-controls="app-project-settings">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><FolderCodeIcon className="size-4 text-muted-foreground" /></span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium">{project.appRoot ? project.appRoot.split(/[\\/]/).filter(Boolean).pop() || project.appRoot : "Link app project"}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" title={project.appRoot ?? undefined}>{project.appRoot || "Add source code context for better copy"}</span>
+              <span className="block truncate text-xs font-medium">{project.appRoot ? project.appRoot.split(/[\\/]/).filter(Boolean).pop() || project.appRoot : "Link app source (optional)"}</span>
+              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" title={project.appRoot ?? undefined}>{project.appRoot || "Help Codex understand your app’s features"}</span>
             </span>
             <ChevronDownIcon className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${settings ? "rotate-180" : ""}`} />
           </button>
@@ -183,9 +183,9 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
             <div className="space-y-1.5">
               <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
               <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
-              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Codex reads your code to understand your app. Relevant code and screenshots are sent to your model provider.</p>
+              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</p>
             </div>
-            {project.appRoot && <p className="text-[11px] text-muted-foreground">Changing the directory starts a new chat.</p>}
+            {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
             <div className="flex items-center justify-between gap-2">
               {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
               <div className="flex items-center gap-1">
@@ -225,7 +225,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
       </div>
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
-        <textarea aria-label="Message Codex" className="min-h-20 w-full resize-none rounded-lg border border-border bg-background p-3 text-sm outline-none focus:border-ring disabled:opacity-50" placeholder="What should we emphasize in this screenshot?" value={draft} maxLength={16000} onChange={(event) => setDraft(event.target.value)} disabled={!project.appRoot || !status?.authenticated || busy} onKeyDown={(event) => {
+        <textarea aria-label="Message Codex" className="min-h-20 w-full resize-none rounded-lg border border-border bg-background p-3 text-sm outline-none focus:border-ring disabled:opacity-50" placeholder="What should we emphasize in this screenshot?" value={draft} maxLength={16000} onChange={(event) => setDraft(event.target.value)} disabled={!status?.authenticated || busy} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
         }} />
         <div className="flex items-center justify-between">
@@ -233,7 +233,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
             catch (error) { reportError(error); }
-          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !project.appRoot || !status?.authenticated || !context.sceneId || connecting}><ArrowUpIcon />Send</Button>}
+          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !context.sceneId || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
     </aside>

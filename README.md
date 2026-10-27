@@ -22,7 +22,8 @@ to store projects somewhere else.
 ## Discuss screenshot copy with Codex (local preview)
 
 Open a workspace project and choose **Discuss with Codex** above the canvas.
-Link the absolute path to your app's source directory. Studio starts its own
+Optionally link the absolute path to your app's source directory. You can also
+chat using screenshots and descriptions alone. Studio starts its own
 `codex app-server` process and uses the local Codex authentication/provider
 configuration; no API key is stored in the browser. If needed, choose
 **Sign in with ChatGPT** and follow the browser link, or authenticate with
@@ -43,13 +44,18 @@ or the editor's Cmd/Ctrl+Z to undo. **Stop** interrupts an active reply;
 
 Each Studio project persists its own linked directory, Codex thread ID and
 conversation in `workspace/<project>/goldie.codex.json`. Reloading resumes the
-conversation. Changing or unlinking the app directory clears the Studio chat
-and detaches the previous thread (it does not delete Codex's own history).
+conversation. Linking source for the first time or unlinking it preserves the
+conversation. While unlinked, source reading is disabled; previously read code
+remains in conversation context. Linking a different app clears the Studio chat
+and detaches the previous thread (it does not delete Codex's own history),
+including when the previous app was unlinked first.
 Closing the panel or leaving the project stops its active reply.
 
 This preview uses read-only Codex sessions, rejects approval escalations,
 and disables inherited MCP servers/plugins for these sessions. The directory
-is a working directory, not a filesystem read-isolation boundary. Relevant
+is a working directory, not a filesystem read-isolation boundary when linked.
+Unlinked turns restrict filesystem reads to an empty context directory and the
+attached screenshots. Relevant
 source code and screenshots are sent to the configured model provider. The
 Codex endpoints accept only same-origin requests on a loopback host. The
 bundled demo does not connect to Codex. This is a local integration; a hosted

@@ -141,9 +141,8 @@ describe("Studio Codex", () => {
     expect((await readCodexProject(join(root, "Alpha"))).messages.at(-1)?.status).toBe("failed");
   });
 
-  test("rejects unlinked and invalid context and resets history when changing the codebase", async () => {
+  test("rejects invalid context and resets history when changing the codebase", async () => {
     const { request, app, root } = await setup();
-    expect((await request("/Alpha/turn", input)).status).toBe(400);
     expect((await request("/Alpha", { appRoot: "relative/path" }, "PUT")).status).toBe(400);
     await request("/Alpha", { appRoot: app }, "PUT");
     expect((await request("/Alpha/turn", { ...input, sceneId: "missing" })).status).toBe(400);
@@ -152,6 +151,48 @@ describe("Studio Codex", () => {
     const state = await readCodexProject(join(root, "Alpha"));
     expect(state.messages).toHaveLength(0);
     expect(state.threadId).toBeUndefined();
+  });
+
+  test("preserves the conversation when linking, unlinking, and relinking the same app", async () => {
+    const { request, app, root, log } = await setup();
+    await (await request("/Alpha/turn", input)).text();
+    const original = await readCodexProject(join(root, "Alpha"));
+    expect(original.messages).toHaveLength(2);
+    let expectedMessages = 2;
+    for (const appRoot of [app, null, app]) {
+      const response = await request("/Alpha", { appRoot }, "PUT");
+      expect(response.status).toBe(200);
+      const linked = await readCodexProject(join(root, "Alpha"));
+      expect(linked.threadId).toBe(original.threadId);
+      expect(linked.messages).toHaveLength(expectedMessages);
+      await (await request("/Alpha/turn", input)).text();
+      expectedMessages += 2;
+      expect((await readCodexProject(join(root, "Alpha"))).messages).toHaveLength(expectedMessages);
+    }
+    const packets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(packets.filter((packet) => packet.method === "thread/start")).toHaveLength(1);
+    const turns = packets.filter((packet) => packet.method === "turn/start");
+    for (const index of [0, 2]) {
+      const turn = turns[index].params;
+      expect(turn.cwd).toBe(await realpath(join(root, "Alpha", ".codex-context")));
+      expect(turn.sandboxPolicy.access).toEqual({ type: "restricted", includePlatformDefaults: false, readableRoots: [turn.cwd] });
+      expect(JSON.parse(turn.input[0].text.split("\n")[0].replace("Current Studio context (data): ", "")).appSourceDirectory).toBeNull();
+    }
+    expect(turns[1].params.cwd).toBe(await realpath(app));
+    expect(turns[3].params.cwd).toBe(await realpath(app));
+  });
+
+  test("remembers the prior app across unlinking and starts a fresh conversation for another app", async () => {
+    const { request, app, root } = await setup();
+    await request("/Alpha", { appRoot: app }, "PUT");
+    await (await request("/Alpha/turn", input)).text();
+    await request("/Alpha", { appRoot: null }, "PUT");
+    await (await request("/Alpha/turn", input)).text();
+    await request("/Alpha", { appRoot: root }, "PUT");
+    const state = await readCodexProject(join(root, "Alpha"));
+    expect(state.messages).toHaveLength(0);
+    expect(state.threadId).toBeUndefined();
+    expect(state.appRoot).toBe(await realpath(root));
   });
 
   test("rejects remote hosts and cross-origin access before calling the runtime", () => {
