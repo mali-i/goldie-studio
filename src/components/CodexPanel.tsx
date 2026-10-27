@@ -1,4 +1,4 @@
-import { ArrowUpIcon, FolderCodeIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
+import { ArrowUpIcon, ChevronDownIcon, FolderCodeIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
 import type { DesignScene } from "../manifest";
@@ -130,18 +130,18 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
               <span className={`mr-2 inline-block size-1.5 rounded-full ${status?.authenticated ? "bg-emerald-500" : "bg-amber-500"}`} />
               {connecting ? "Connecting…" : serviceUnavailable ? "Studio service unavailable" : status?.authenticated ? "Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
             </span>
+            <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
+              setConnecting(true); setError("");
+              try {
+                if (!serviceUnavailable) setStatus(await codexJson<CodexStatus>(`${base}/reconnect`, {}));
+                await refresh();
+              }
+              catch (error) { reportError(error); }
+              finally { setConnecting(false); }
+            }}><RefreshCwIcon /></Button>
           </div>
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
-          <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
-            setConnecting(true); setError("");
-            try {
-              if (!serviceUnavailable) setStatus(await codexJson<CodexStatus>(`${base}/reconnect`, {}));
-              await refresh();
-            }
-            catch (error) { reportError(error); }
-            finally { setConnecting(false); }
-          }}><RefreshCwIcon /></Button>
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
       </header>
@@ -153,16 +153,31 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           finally { setConnecting(false); }
         }}>Sign in with ChatGPT</Button>}
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
-        <button className="flex w-full items-center gap-2 text-left text-xs" onClick={() => setSettings(!settings)} aria-expanded={settings}>
-          <FolderCodeIcon className="size-4 shrink-0" /><span className="truncate" title={project.appRoot ?? undefined}>{project.appRoot || "Link app project"}</span>
-        </button>
-        {settings && <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); void link(path.trim()); }}>
-          <label className="block text-xs text-muted-foreground" htmlFor="app-directory">App source directory</label>
-          <Input id="app-directory" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} />
-          <p className="text-[11px] leading-relaxed text-muted-foreground">Codex explores code in read-only mode. Relevant code and screenshots are sent to your model provider. Changing the directory starts a new chat.</p>
-          <div className="flex gap-2"><Button size="sm" disabled={busy || connecting || !path.trim()}>Link project</Button>
-            {project.appRoot && <Button type="button" size="sm" variant="ghost" disabled={busy || connecting} onClick={() => void link(null)}>Unlink</Button>}</div>
-        </form>}
+        <section className="overflow-hidden rounded-xl border border-border bg-background/60" aria-label="App project">
+          <button type="button" className="flex w-full items-center gap-2.5 p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => setSettings(!settings)} aria-expanded={settings} aria-controls="app-project-settings">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><FolderCodeIcon className="size-4 text-muted-foreground" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium">{project.appRoot ? project.appRoot.split(/[\\/]/).filter(Boolean).pop() || project.appRoot : "Link app project"}</span>
+              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" title={project.appRoot ?? undefined}>{project.appRoot || "Add source code context for better copy"}</span>
+            </span>
+            <ChevronDownIcon className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${settings ? "rotate-180" : ""}`} />
+          </button>
+          {settings && <form id="app-project-settings" className="space-y-3 border-t border-border p-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting) void link(path.trim()); }}>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
+              <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
+              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Codex reads your code to understand your app. Relevant code and screenshots are sent to your model provider.</p>
+            </div>
+            {project.appRoot && <p className="text-[11px] text-muted-foreground">Changing the directory starts a new chat.</p>}
+            <div className="flex items-center justify-between gap-2">
+              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
+              <div className="flex items-center gap-1">
+                {project.appRoot && <Button type="button" size="sm" variant="ghost" disabled={connecting} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>}
+                <Button size="sm" disabled={busy || connecting || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
+              </div>
+            </div>
+          </form>}
+        </section>
         <label className="block text-xs text-muted-foreground" htmlFor="chat-scene">Screenshot · {context.locale}</label>
         <select id="chat-scene" className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs" value={context.sceneId} onChange={(event) => onScene(event.target.value)}>
           {scenes.map((scene, index) => <option key={scene.id} value={scene.id}>{index + 1}. {scene.headline[context.locale] || scene.id}</option>)}
