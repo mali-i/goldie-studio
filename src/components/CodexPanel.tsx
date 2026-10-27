@@ -1,6 +1,6 @@
 import { ArrowUpIcon, FolderCodeIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { codexJson, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
+import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
 import type { DesignScene } from "../manifest";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -25,12 +25,22 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [activity, setActivity] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
   const [applied, setApplied] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
+
+  const reportError = (error: unknown) => {
+    if (!mounted.current) return;
+    setError(messageOf(error));
+    if (error instanceof CodexRequestError && error.kind !== "http") {
+      setServiceUnavailable(true);
+      setStatus(null);
+    }
+  };
 
   const refresh = async () => {
     setConnecting(true);
@@ -40,11 +50,12 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
       ]);
       if (!mounted.current) return;
       setProject(state); setPath(state.appRoot ?? ""); setStatus(connection);
+      setServiceUnavailable(false);
       setBusy(state.busy);
       if (!state.appRoot) setSettings(true);
       if (connection.authenticated) setLoginUrl("");
       setError(connection.error ?? "");
-    } catch (error) { if (mounted.current) setError(messageOf(error)); }
+    } catch (error) { reportError(error); }
     finally { if (mounted.current) setConnecting(false); }
   };
 
@@ -53,6 +64,16 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
     void refresh();
     return () => { mounted.current = false; abort.current?.abort(); };
   }, [base]);
+
+  useEffect(() => {
+    const recover = () => { if (serviceUnavailable && !busy && !connecting) void refresh(); };
+    window.addEventListener("online", recover);
+    window.addEventListener("focus", recover);
+    return () => {
+      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", recover);
+    };
+  }, [base, busy, connecting, serviceUnavailable]);
 
   // Recover an active turn after a reload, and update login state after OAuth.
   useEffect(() => {
@@ -68,7 +89,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
     try {
       const state = await codexJson<CodexProject>(base, { appRoot }, "PUT");
       setProject(state); setPath(state.appRoot ?? ""); setSettings(!state.appRoot); setApplied(null);
-    } catch (error) { setError(messageOf(error)); }
+    } catch (error) { reportError(error); }
     finally { setConnecting(false); }
   };
 
@@ -87,7 +108,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
         if (event.type === "error") setError(event.text);
         if (event.type === "reply") setProject((prev) => ({ ...prev, messages: [...prev.messages, event.message] }));
       });
-    } catch (error) { if (mounted.current && !controller.signal.aborted) setError(messageOf(error)); }
+    } catch (error) { if (!controller.signal.aborted) reportError(error); }
     finally {
       abort.current = null;
       if (mounted.current) {
@@ -111,19 +132,22 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="min-w-0 truncate" title={status?.account}>
             <span className={`mr-2 inline-block size-1.5 rounded-full ${status?.authenticated ? "bg-emerald-500" : "bg-amber-500"}`} />
-            {connecting ? "Connecting…" : status?.authenticated ? "Codex · Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
+            {connecting ? "Connecting…" : serviceUnavailable ? "Studio service unavailable" : status?.authenticated ? "Codex · Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
           </span>
-          <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label="Reconnect Codex" onClick={async () => {
+          <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
             setConnecting(true); setError("");
-            try { setStatus(await codexJson<CodexStatus>(`${base}/reconnect`, {})); await refresh(); }
-            catch (error) { setError(messageOf(error)); }
+            try {
+              if (!serviceUnavailable) setStatus(await codexJson<CodexStatus>(`${base}/reconnect`, {}));
+              await refresh();
+            }
+            catch (error) { reportError(error); }
             finally { setConnecting(false); }
           }}><RefreshCwIcon /></Button>
         </div>
         {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting} onClick={async () => {
           setConnecting(true); setError("");
           try { const result = await codexJson<{ authUrl: string }>(`${base}/login`, {}); setLoginUrl(result.authUrl); }
-          catch (error) { setError(messageOf(error)); }
+          catch (error) { reportError(error); }
           finally { setConnecting(false); }
         }}>Sign in with ChatGPT</Button>}
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
@@ -171,7 +195,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           <Button type="button" size="sm" variant="ghost" disabled={!canUndo} onClick={() => { onUndo(); setApplied(null); }}><Undo2Icon />Undo last edit</Button>
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
-            catch (error) { setError(messageOf(error)); }
+            catch (error) { reportError(error); }
           }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !project.appRoot || !status?.authenticated || !context.sceneId || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>

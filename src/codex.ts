@@ -26,26 +26,59 @@ export type ChatEvent =
   | { type: "error"; text: string }
   | { type: "done" };
 
+export class CodexRequestError extends Error {
+  constructor(message: string, readonly kind: "network" | "backend" | "http") {
+    super(message);
+    this.name = "CodexRequestError";
+  }
+}
+
+async function fetchStudio(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (init?.signal?.aborted && init.signal.reason?.name !== "TimeoutError") throw error;
+    throw new CodexRequestError(
+      `Cannot reach the local Studio service. Check that it is running and that this page uses the Local URL printed by bun run dev (including the port). Then retry.`,
+      "network",
+    );
+  }
+}
+
+async function responseJson(response: Response): Promise<any> {
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new CodexRequestError(
+      "The Studio backend is unavailable at this address. Start bun run dev in the Goldie Studio directory and open the Local URL printed in the terminal.",
+      "backend",
+    );
+  }
+  let result;
+  try { result = await response.json(); }
+  catch {
+    throw new CodexRequestError("The local Studio service returned an incomplete response. Check the terminal and retry.", "backend");
+  }
+  if (!response.ok) throw new CodexRequestError(result.error ?? `Studio request failed (${response.status}).`, "http");
+  return result;
+}
+
 export async function codexJson<T>(url: string, body?: unknown, method = "POST"): Promise<T> {
-  const response = await fetch(url, body === undefined ? undefined : {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  const response = await fetchStudio(url, {
+    ...(body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(45_000),
   });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "Codex request failed.");
-  return result as T;
+  return await responseJson(response) as T;
 }
 
 export async function streamChat(url: string, input: ChatInput, signal: AbortSignal, onEvent: (event: ChatEvent) => void) {
-  const response = await fetch(url, {
+  const response = await fetchStudio(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input), signal,
   });
   if (!response.ok) {
-    const result = await response.json();
-    throw new Error(result.error ?? "Could not start conversation.");
+    await responseJson(response);
   }
+  if (!response.headers.get("Content-Type")?.includes("application/x-ndjson")) throw new CodexRequestError("The Studio chat backend is unavailable at this address. Open the Local URL printed by bun run dev.", "backend");
   if (!response.body) throw new Error("Streaming responses are unavailable.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -65,6 +98,9 @@ export async function streamChat(url: string, input: ChatInput, signal: AbortSig
       }
       if (chunk.done) break;
     }
-    if (!completed) throw new Error("Connection lost. Reconnect to recover the saved conversation.");
+    if (!completed) throw new CodexRequestError("Studio connection lost. Check that the local service is running, then retry to recover the saved conversation.", "network");
+  } catch (error) {
+    if (!signal.aborted && error instanceof TypeError) throw new CodexRequestError("Studio connection lost while receiving the reply. Check the local service and retry.", "network");
+    throw error;
   } finally { reader.releaseLock(); }
 }
