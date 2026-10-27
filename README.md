@@ -35,10 +35,14 @@ or invalid executable shows a connection error without stopping the web server.
 A **Frame** is one App promotional image on the canvas. Type **@** in the
 assistant’s message box to choose a Frame from the current canvas. Type to
 filter, use arrow keys and Enter to select, or Escape to dismiss. The selected
-Frame appears above the message; click it to switch Frames. You can also open
-a promotional image on the canvas to select its content. Each message includes
-the selected Frame’s scene, device, language, current
-headline/subhead (including unsaved edits), and uploaded app screenshots.
+Frames appear above the message. Repeat **@** to add more Frames; already
+selected Frames are excluded from the list. Each tag has an **×** to remove
+that reference. All selected Frames, their current copy, and their uploaded
+screenshots are included in the turn. When discussing multiple scenes, copy
+suggestions appear in the reply rather than a single ambiguous Apply action.
+Before explicitly choosing references, opening a promotional image on the
+canvas sets the initial Frame. Each message also includes the current device
+and language.
 Codex can read relevant app code to ground its suggestions. Tool activity
 appears while it works; the conversational reply and optional copy proposal
 appear when the turn finishes. **Apply copy** changes both text fields in one

@@ -1,7 +1,8 @@
 import type { DesignScene, SceneCopy } from "../manifest";
+import type { ChatFrameContext } from "../codex";
 import { isTemplateKey, resolveScenes, type LayoutKey } from "./layouts";
 
-export type ChatFrame = { id: string; sceneId: string; label: string; headline: string };
+export type ChatFrame = ChatFrameContext;
 
 /** One entry per exported still, in the same order and layout as the canvas. */
 export function chatFrames(scenes: DesignScene[], order: string[], template: string | string[], layout: string, sceneLayouts: Record<string, string>, copy: Record<string, SceneCopy>, locale: string): ChatFrame[] {
@@ -15,6 +16,7 @@ export function chatFrames(scenes: DesignScene[], order: string[], template: str
     id: `${scene.id}#${slice + 1}`,
     sceneId: scene.id,
     headline: copy[scene.id]?.headline?.[locale] ?? scene.headline[locale] ?? "",
+    subhead: copy[scene.id]?.subhead?.[locale] ?? scene.subhead?.[locale] ?? "",
   }))).map((frame, index) => ({ ...frame, label: `Frame ${index + 1}` }));
 }
 

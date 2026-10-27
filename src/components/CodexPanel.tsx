@@ -28,11 +28,10 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const [path, setPath] = useState("");
   const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
-  const [frameSelection, setFrameSelection] = useState<{ sceneId: string; frameId: string | null } | null>(null);
-  const selectedFrame = frameSelection?.sceneId === context.sceneId && frameSelection.frameId === null
-    ? undefined
-    : frames.find((frame) => frame.id === frameSelection?.frameId && frame.sceneId === context.sceneId)
-      ?? frames.find((frame) => frame.sceneId === context.sceneId);
+  const [selectedFrameIds, setSelectedFrameIds] = useState<string[] | null>(null);
+  const selectedFrames = selectedFrameIds === null
+    ? frames.filter((frame) => frame.sceneId === context.sceneId).slice(0, 1)
+    : selectedFrameIds.flatMap((id) => frames.filter((frame) => frame.id === id));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -116,8 +115,9 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   const send = async () => {
-    if (!draft.trim() || busy || !context.sceneId || !selectedFrame) return;
-    const input = { ...context, message: draft.trim() };
+    if (!draft.trim() || busy || !selectedFrames.length) return;
+    const primary = selectedFrames[0]!;
+    const input: ChatInput = { ...context, sceneId: primary.sceneId, headline: primary.headline, subhead: primary.subhead, frames: selectedFrames, message: draft.trim() };
     const optimistic: ChatMessage = { ...input, id: crypto.randomUUID(), role: "user", text: input.message };
     setProject((prev) => ({ ...prev, messages: [...prev.messages, optimistic] }));
     setDraft(""); setBusy(true); setError(""); setActivity("Connecting to Codex…");
@@ -209,7 +209,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         {!project.messages.length && <div className="py-6 text-sm leading-relaxed text-muted-foreground"><p>What should this Frame say?</p><p className="mt-2 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
         {sourceError && <p role="status" className="text-xs text-muted-foreground">{sourceError}</p>}
         {project.messages.map((message) => <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={`rounded-xl p-3 text-sm focus:outline-2 focus:outline-amber-400 ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.sceneId} · {message.locale}</p>
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.frames?.map((frame) => frame.label).join(", ") || message.sceneId} · {message.locale}</p>
           {message.role === "assistant" ? <HighlightText text={message.text} disabled={!notes.ready} excerpts={notes.notes.excerpts.filter((e) => e.messageId === message.id)} onHighlight={(start, end) => {
             notes.update((n) => n.excerpts.some((e) => e.messageId === message.id && e.start === start && e.end === end) ? n : ({ ...n, excerpts: [...n.excerpts, { id: crypto.randomUUID(), messageId: message.id, start, end, text: message.text.slice(start, end), createdAt: new Date().toISOString() }] }));
           }} /> : <p className="whitespace-pre-wrap break-words leading-relaxed">{message.text}</p>}
@@ -226,16 +226,16 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
       </div>
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
-        <FrameComposer frames={frames} selected={selectedFrame} locale={context.locale} value={draft} disabled={!status?.authenticated || busy}
-          onChange={setDraft} onSelect={(frame) => { setFrameSelection({ sceneId: frame.sceneId, frameId: frame.id }); onScene(frame.sceneId); }}
-          onRemove={() => setFrameSelection({ sceneId: context.sceneId, frameId: null })} onSend={() => void send()} />
-        {!selectedFrame && <p className="text-xs text-muted-foreground">Type @ to choose a Frame before sending.</p>}
+        <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy}
+          onChange={setDraft} onSelect={(frame) => { setSelectedFrameIds([...new Set([...selectedFrames.map((item) => item.id), frame.id])]); onScene(frame.sceneId); }}
+          onRemove={(id) => setSelectedFrameIds(selectedFrames.filter((frame) => frame.id !== id).map((frame) => frame.id))} onSend={() => void send()} />
+        {!selectedFrames.length && <p className="text-xs text-muted-foreground">Type @ to choose a Frame before sending.</p>}
         <div className="flex items-center justify-between">
           <Button type="button" size="sm" variant="ghost" disabled={!canUndo} onClick={() => { onUndo(); setApplied(null); }}><Undo2Icon />Undo last edit</Button>
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
             catch (error) { reportError(error); }
-          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !selectedFrame || connecting}><ArrowUpIcon />Send</Button>}
+          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !selectedFrames.length || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
     </aside>

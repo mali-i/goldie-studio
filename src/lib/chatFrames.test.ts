@@ -19,10 +19,10 @@ describe("Frame mentions", () => {
       a: { headline: { "zh-Hans": "未保存的修改" } },
     }, "zh-Hans");
     expect(frames).toEqual([
-      { id: "c#1", sceneId: "c", label: "Frame 1", headline: "全景" },
-      { id: "c#2", sceneId: "c", label: "Frame 2", headline: "全景" },
-      { id: "b#1", sceneId: "b", label: "Frame 3", headline: "" },
-      { id: "a#1", sceneId: "a", label: "Frame 4", headline: "未保存的修改" },
+      { id: "c#1", sceneId: "c", label: "Frame 1", headline: "全景", subhead: "" },
+      { id: "c#2", sceneId: "c", label: "Frame 2", headline: "全景", subhead: "" },
+      { id: "b#1", sceneId: "b", label: "Frame 3", headline: "", subhead: "" },
+      { id: "a#1", sceneId: "a", label: "Frame 4", headline: "未保存的修改", subhead: "" },
     ]);
   });
 

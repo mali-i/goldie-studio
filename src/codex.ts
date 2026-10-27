@@ -1,5 +1,6 @@
 /** Public Studio/Codex contract. Credentials never cross this API. */
 export type CopyProposal = { headline: string; subhead: string };
+export type ChatFrameContext = { id: string; sceneId: string; label: string; headline: string; subhead: string };
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -7,6 +8,7 @@ export type ChatMessage = {
   sceneId: string;
   locale: string;
   device: string;
+  frames?: ChatFrameContext[];
   status?: "completed" | "interrupted" | "failed";
   proposal?: CopyProposal | null;
 };
@@ -19,6 +21,7 @@ export type ChatInput = {
   device: string;
   headline: string;
   subhead: string;
+  frames?: ChatFrameContext[];
 };
 export type ChatEvent =
   | { type: "activity"; text: string }

@@ -4,19 +4,19 @@ import { frameMention, type ChatFrame } from "../lib/chatFrames";
 
 export function FrameComposer({ frames, selected, locale, value, disabled, onChange, onSelect, onRemove, onSend }: {
   frames: ChatFrame[];
-  selected?: ChatFrame;
+  selected: ChatFrame[];
   locale: string;
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
   onSelect: (frame: ChatFrame) => void;
-  onRemove: () => void;
+  onRemove: (id: string) => void;
   onSend: () => void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const [mention, setMention] = useState<ReturnType<typeof frameMention>>(null);
   const [active, setActive] = useState(0);
-  const matches = frames.filter((frame) => `${frame.label} ${frame.headline} ${frame.sceneId}`.toLocaleLowerCase().includes(mention?.query.toLocaleLowerCase() ?? ""));
+  const matches = frames.filter((frame) => !selected.some((item) => item.id === frame.id) && `${frame.label} ${frame.headline} ${frame.sceneId}`.toLocaleLowerCase().includes(mention?.query.toLocaleLowerCase() ?? ""));
   const open = mention !== null && !disabled;
   const activeIndex = Math.min(active, Math.max(0, matches.length - 1));
 
@@ -46,20 +46,20 @@ export function FrameComposer({ frames, selected, locale, value, disabled, onCha
           <FrameIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0"><span className="block font-medium">{frame.label}</span><span className="block truncate text-muted-foreground">{frame.headline || "Untitled"}</span></span>
         </button>)}
-        {!matches.length && <p role="status" className="p-3 text-xs text-muted-foreground">{frames.length ? "No matching Frames" : "No Frames on this canvas"}</p>}
+        {!matches.length && <p role="status" className="p-3 text-xs text-muted-foreground">{frames.length ? frames.every((frame) => selected.some((item) => item.id === frame.id)) ? "All Frames selected" : "No matching Frames" : "No Frames on this canvas"}</p>}
       </div>
     </div>}
-    {selected && <div className="px-3 pt-3"><div className="flex w-fit max-w-full items-center rounded-md bg-muted text-xs"><button type="button" disabled={disabled} className="flex min-w-0 items-center gap-1.5 rounded-l-md px-2 py-1" title={`${selected.headline || selected.label} · ${locale}`} aria-label={`Change ${selected.label}`} onClick={() => {
+    {selected.length > 0 && <div className="flex flex-wrap gap-1.5 px-3 pt-3">{selected.map((frame) => <div key={frame.id} className="flex max-w-full items-center rounded-md bg-muted text-xs"><button type="button" disabled={disabled} className="flex min-w-0 items-center gap-1.5 rounded-l-md px-2 py-1" title={`${frame.headline || frame.label} · ${locale}`} aria-label={`Add Frame reference after ${frame.label}`} onClick={() => {
       const prefix = value && !/\s$/.test(value) ? `${value} ` : value;
       onChange(`${prefix}@`);
       updateMention(`${prefix}@`, prefix.length + 1);
       input.current?.focus();
-    }}><FrameIcon className="size-3 shrink-0" /><span className="truncate">{selected.label}{selected.headline ? ` · ${selected.headline}` : ""}</span><span className="shrink-0 text-muted-foreground">{locale}</span></button><button type="button" disabled={disabled} className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50" aria-label={`Remove ${selected.label}`} title="Remove Frame reference" onClick={() => {
-      onRemove();
+    }}><FrameIcon className="size-3 shrink-0" /><span className="truncate">{frame.label}{frame.headline ? ` · ${frame.headline}` : ""}</span><span className="shrink-0 text-muted-foreground">{locale}</span></button><button type="button" disabled={disabled} className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50" aria-label={`Remove ${frame.label}`} title="Remove Frame reference" onClick={() => {
+      onRemove(frame.id);
       setMention(null);
       input.current?.focus();
-    }}><XIcon className="size-3" /></button></div></div>}
-    <textarea ref={input} aria-label="Message Codex" aria-expanded={open} aria-controls={open ? "chat-frame-options" : undefined} aria-activedescendant={open && matches.length ? `frame-option-${activeIndex}` : undefined} aria-autocomplete="list" className="min-h-20 w-full resize-none rounded-xl bg-transparent p-3 text-sm outline-none disabled:opacity-50" placeholder="Type @ to choose a Frame. What should we emphasize?" value={value} maxLength={16000} disabled={disabled}
+    }}><XIcon className="size-3" /></button></div>)}</div>}
+    <textarea ref={input} aria-label="Message Codex" aria-expanded={open} aria-controls={open ? "chat-frame-options" : undefined} aria-activedescendant={open && matches.length ? `frame-option-${activeIndex}` : undefined} aria-autocomplete="list" className="min-h-20 w-full resize-none rounded-xl bg-transparent p-3 text-sm outline-none disabled:opacity-50" placeholder="Type @ to add Frames. What should we emphasize?" value={value} maxLength={16000} disabled={disabled}
       onChange={(event) => { onChange(event.target.value); updateMention(event.target.value, event.target.selectionStart); }}
       onClick={(event) => updateMention(value, event.currentTarget.selectionStart)}
       onBlur={() => setMention(null)}

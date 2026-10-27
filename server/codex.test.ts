@@ -124,6 +124,45 @@ describe("Studio Codex", () => {
     expect(turn.params.input[1].path).toContain("screenshots/");
   });
 
+  test("attaches and persists all selected Frames, maps deduplicated images, and avoids ambiguous proposals", async () => {
+    const { request, root, log, alpha } = await setup();
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    for (const sceneId of ["scene-1", "scene-2"]) {
+      await workspaceService.saveScreenshot(root, "Alpha", { ...input, sceneId, mimeType: "image/png", base64: png });
+    }
+    Object.assign(alpha, await workspaceService.readProject(root, "Alpha"));
+    const frames = [
+      { id: "scene-1#1", sceneId: "scene-1", label: "Frame 1", headline: input.headline, subhead: input.subhead },
+      { id: "scene-1#2", sceneId: "scene-1", label: "Frame 2", headline: input.headline, subhead: input.subhead },
+      { id: "scene-2#1", sceneId: "scene-2", label: "Frame 3", headline: "Unsaved second title", subhead: "Unsaved second subtitle" },
+    ];
+    const response = await request("/Alpha/turn", { ...input, frames });
+    expect(response.status).toBe(200);
+    await response.text();
+    const packets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const turn = packets.find((packet) => packet.method === "turn/start");
+    expect(turn.params.input.slice(1)).toHaveLength(2);
+    const context = JSON.parse(turn.params.input[0].text.split("Current Studio context (data): ")[1].split("\n\nUser:")[0]);
+    expect(context.frames).toEqual(frames.map((frame, index) => ({ ...frame, imageIndexes: [index === 2 ? 1 : 0] })));
+    expect(context.imagesAttached).toBe(2);
+    expect(turn.params.sandboxPolicy.access.readableRoots).toEqual(expect.arrayContaining(turn.params.input.slice(1).map((image: { path: string }) => image.path)));
+    const state = await readCodexProject(join(root, "Alpha"));
+    expect(state.messages.map((message) => message.frames)).toEqual([frames, frames]);
+    expect(state.messages[1]?.proposal).toBeNull();
+    expect((await request("/Alpha/turn", { ...input, frames: [frames[0], frames[0]] })).status).toBe(400);
+    expect((await request("/Alpha/turn", { ...input, frames: [{ ...frames[0], sceneId: "missing" }] })).status).toBe(400);
+    expect((await request("/Alpha/turn", { ...input, frames: [{ ...frames[0], headline: "mismatch" }] })).status).toBe(400);
+    expect((await request("/Alpha/turn", { ...input, frames: [] })).status).toBe(400);
+    // Removing references must also remove their copy and images from the next turn.
+    await (await request("/Alpha/turn", { ...input, ...frames[2], frames: [frames[2]] })).text();
+    const updatedPackets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const next = updatedPackets.filter((packet) => packet.method === "turn/start").at(-1);
+    expect(next.params.input.slice(1)).toHaveLength(1);
+    expect(next.params.input[0].text).not.toContain("Unsaved headline");
+    expect(next.params.input[1].path).toContain("scene-2");
+    expect((await readCodexProject(join(root, "Alpha"))).messages.at(-1)?.proposal?.headline).toBe("See your progress");
+  });
+
   test("stops active turns, rejects concurrent sends, and persists failed/interrupted replies", async () => {
     const { request, app, root } = await setup();
     await request("/Alpha", { appRoot: app }, "PUT");
