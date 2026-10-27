@@ -28,9 +28,11 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const [path, setPath] = useState("");
   const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
-  const [frameId, setFrameId] = useState("");
-  const selectedFrame = frames.find((frame) => frame.id === frameId && frame.sceneId === context.sceneId)
-    ?? frames.find((frame) => frame.sceneId === context.sceneId);
+  const [frameSelection, setFrameSelection] = useState<{ sceneId: string; frameId: string | null } | null>(null);
+  const selectedFrame = frameSelection?.sceneId === context.sceneId && frameSelection.frameId === null
+    ? undefined
+    : frames.find((frame) => frame.id === frameSelection?.frameId && frame.sceneId === context.sceneId)
+      ?? frames.find((frame) => frame.sceneId === context.sceneId);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -114,7 +116,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   const send = async () => {
-    if (!draft.trim() || busy || !context.sceneId) return;
+    if (!draft.trim() || busy || !context.sceneId || !selectedFrame) return;
     const input = { ...context, message: draft.trim() };
     const optimistic: ChatMessage = { ...input, id: crypto.randomUUID(), role: "user", text: input.message };
     setProject((prev) => ({ ...prev, messages: [...prev.messages, optimistic] }));
@@ -225,13 +227,15 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
         <FrameComposer frames={frames} selected={selectedFrame} locale={context.locale} value={draft} disabled={!status?.authenticated || busy}
-          onChange={setDraft} onSelect={(frame) => { setFrameId(frame.id); onScene(frame.sceneId); }} onSend={() => void send()} />
+          onChange={setDraft} onSelect={(frame) => { setFrameSelection({ sceneId: frame.sceneId, frameId: frame.id }); onScene(frame.sceneId); }}
+          onRemove={() => setFrameSelection({ sceneId: context.sceneId, frameId: null })} onSend={() => void send()} />
+        {!selectedFrame && <p className="text-xs text-muted-foreground">Type @ to choose a Frame before sending.</p>}
         <div className="flex items-center justify-between">
           <Button type="button" size="sm" variant="ghost" disabled={!canUndo} onClick={() => { onUndo(); setApplied(null); }}><Undo2Icon />Undo last edit</Button>
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
             catch (error) { reportError(error); }
-          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !context.sceneId || connecting}><ArrowUpIcon />Send</Button>}
+          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !selectedFrame || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
     </aside>
