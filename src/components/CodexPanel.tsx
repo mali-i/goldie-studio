@@ -4,18 +4,18 @@ import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMess
 import { HighlightText } from "./HighlightText";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import type { Excerpt } from "../notes";
-import type { DesignScene } from "../manifest";
+import type { ChatFrame } from "../lib/chatFrames";
+import { FrameComposer } from "./FrameComposer";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
+export function CodexPanel({ projectId, frames, context, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
   notes: NotesController;
   source: Excerpt | null;
   projectId: string;
-  scenes: DesignScene[];
+  frames: ChatFrame[];
   context: Omit<ChatInput, "message">;
-  imageUrl?: string;
   onScene: (id: string) => void;
   onApply: (sceneId: string, locale: string, proposal: CopyProposal) => void;
   onUndo: () => void;
@@ -28,6 +28,9 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
   const [path, setPath] = useState("");
   const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
+  const [frameId, setFrameId] = useState("");
+  const selectedFrame = frames.find((frame) => frame.id === frameId && frame.sceneId === context.sceneId)
+    ?? frames.find((frame) => frame.sceneId === context.sceneId);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -191,7 +194,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
       </header>
-      <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
+      {(status?.available && !status.authenticated || loginUrl) && <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
         {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting} onClick={async () => {
           setConnecting(true); setError("");
           try { const result = await codexJson<{ authUrl: string }>(`${base}/login`, {}); setLoginUrl(result.authUrl); }
@@ -199,17 +202,9 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           finally { setConnecting(false); }
         }}>Sign in with ChatGPT</Button>}
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
-        <label className="block text-xs text-muted-foreground" htmlFor="chat-scene">Screenshot · {context.locale}</label>
-        <select id="chat-scene" className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs" value={context.sceneId} onChange={(event) => onScene(event.target.value)}>
-          {scenes.map((scene, index) => <option key={scene.id} value={scene.id}>{index + 1}. {scene.headline[context.locale] || scene.id}</option>)}
-        </select>
-        <div className="flex gap-3 rounded-lg bg-muted/50 p-2">
-          {imageUrl && <img src={imageUrl} alt="Current app screenshot" className="h-16 w-9 shrink-0 rounded object-cover object-top" />}
-          <div className="min-w-0 text-xs"><p className="font-medium break-words">{context.headline || "No headline yet"}</p><p className="mt-1 break-words text-muted-foreground">{context.subhead}</p>{!imageUrl && <p className="mt-1 text-muted-foreground">No screenshot uploaded for this device and language.</p>}</div>
-        </div>
-      </div>
+      </div>}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-label="Project conversation">
-        {!project.messages.length && <div className="py-6 text-sm leading-relaxed text-muted-foreground"><p>What should this screenshot say?</p><p className="mt-2 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
+        {!project.messages.length && <div className="py-6 text-sm leading-relaxed text-muted-foreground"><p>What should this Frame say?</p><p className="mt-2 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
         {sourceError && <p role="status" className="text-xs text-muted-foreground">{sourceError}</p>}
         {project.messages.map((message) => <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={`rounded-xl p-3 text-sm focus:outline-2 focus:outline-amber-400 ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.sceneId} · {message.locale}</p>
@@ -229,9 +224,8 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
       </div>
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
-        <textarea aria-label="Message Codex" className="min-h-20 w-full resize-none rounded-lg border border-border bg-background p-3 text-sm outline-none focus:border-ring disabled:opacity-50" placeholder="What should we emphasize in this screenshot?" value={draft} maxLength={16000} onChange={(event) => setDraft(event.target.value)} disabled={!status?.authenticated || busy} onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
-        }} />
+        <FrameComposer frames={frames} selected={selectedFrame} locale={context.locale} value={draft} disabled={!status?.authenticated || busy}
+          onChange={setDraft} onSelect={(frame) => { setFrameId(frame.id); onScene(frame.sceneId); }} onSend={() => void send()} />
         <div className="flex items-center justify-between">
           <Button type="button" size="sm" variant="ghost" disabled={!canUndo} onClick={() => { onUndo(); setApplied(null); }}><Undo2Icon />Undo last edit</Button>
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {

@@ -12,6 +12,7 @@ import { EmptyState } from "./components/EmptyState";
 import { NotesPanel } from "./components/NotesPanel";
 import { useWorkspaceNotes } from "./lib/useWorkspaceNotes";
 import type { Excerpt } from "./notes";
+import { chatFrames } from "./lib/chatFrames";
 import { CodexPanel } from "./components/CodexPanel";
 import { Button } from "./components/ui/button";
 import { PreviewCanvas } from "./components/PreviewCanvas";
@@ -524,9 +525,10 @@ function Loaded({
         notes={notes}
         source={noteSource}
         projectId={projectId}
-        scenes={design.scenes}
+        frames={spec && captures ? chatFrames(design.scenes, order,
+          template === CUSTOM_TEMPLATE && Array.isArray(design.template) ? design.template : template,
+          layout, sceneLayouts, copy, locale) : []}
         context={{ sceneId: selectedScene?.id ?? "", device, locale, headline: chatHeadline, subhead: chatSubhead }}
-        imageUrl={captures?.screenshots.find((entry) => entry.sceneId === selectedScene?.id && (entry.slot ?? "primary") === "primary")?.url}
         onScene={setChatScene}
         onClose={() => {
           setChatOpen(false);

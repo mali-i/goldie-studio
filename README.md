@@ -32,8 +32,12 @@ executable in an installed ChatGPT app. To select another executable, start
 Studio with `GOLDIE_CODEX_BIN=/absolute/path/to/codex bun run dev`. A missing
 or invalid executable shows a connection error without stopping the web server.
 
-Select a scene in the assistant, or open a screenshot on the canvas to select
-it. Each message includes the selected scene, device, language, current
+A **Frame** is one App promotional image on the canvas. Type **@** in the
+assistant’s message box to choose a Frame from the current canvas. Type to
+filter, use arrow keys and Enter to select, or Escape to dismiss. The selected
+Frame appears above the message; click it to switch Frames. You can also open
+a promotional image on the canvas to select its content. Each message includes
+the selected Frame’s scene, device, language, current
 headline/subhead (including unsaved edits), and uploaded app screenshots.
 Codex can read relevant app code to ground its suggestions. Tool activity
 appears while it works; the conversational reply and optional copy proposal
