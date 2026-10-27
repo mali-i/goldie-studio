@@ -122,18 +122,17 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
   return (
     <aside id="codex-panel" aria-label="Codex assistant" className="ml-3 flex h-full w-[380px] max-w-[42vw] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-lg border border-border bg-background"><MessageSquareIcon className="size-4 text-muted-foreground" /></span>
-          <div><h2 className="text-sm font-semibold">Codex</h2><p className="text-[11px] text-muted-foreground">Screenshot copy partner</p></div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background"><MessageSquareIcon className="size-4 text-muted-foreground" /></span>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="shrink-0 text-sm font-semibold">Codex</h2>
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground" role="status" title={status?.account}>
+              <span className={`mr-2 inline-block size-1.5 rounded-full ${status?.authenticated ? "bg-emerald-500" : "bg-amber-500"}`} />
+              {connecting ? "Connecting…" : serviceUnavailable ? "Studio service unavailable" : status?.authenticated ? "Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
+            </span>
+          </div>
         </div>
-        <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
-      </header>
-      <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="min-w-0 truncate" title={status?.account}>
-            <span className={`mr-2 inline-block size-1.5 rounded-full ${status?.authenticated ? "bg-emerald-500" : "bg-amber-500"}`} />
-            {connecting ? "Connecting…" : serviceUnavailable ? "Studio service unavailable" : status?.authenticated ? "Codex · Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
-          </span>
+        <div className="ml-2 flex shrink-0 items-center gap-1">
           <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
             setConnecting(true); setError("");
             try {
@@ -143,7 +142,10 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
             catch (error) { reportError(error); }
             finally { setConnecting(false); }
           }}><RefreshCwIcon /></Button>
+          <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
+      </header>
+      <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
         {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting} onClick={async () => {
           setConnecting(true); setError("");
           try { const result = await codexJson<{ authUrl: string }>(`${base}/login`, {}); setLoginUrl(result.authUrl); }
