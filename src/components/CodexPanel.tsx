@@ -1,4 +1,4 @@
-import { ArrowUpIcon, ChevronDownIcon, FolderCodeIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
+import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
 import { HighlightText } from "./HighlightText";
@@ -7,6 +7,7 @@ import type { Excerpt } from "../notes";
 import type { DesignScene } from "../manifest";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
   notes: NotesController;
@@ -59,7 +60,6 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
       setProject(state); setPath(state.appRoot ?? ""); setStatus(connection);
       setServiceUnavailable(false);
       setBusy(state.busy);
-      if (!state.appRoot) setSettings(true);
       if (connection.authenticated) setLoginUrl("");
       setError(connection.error ?? "");
     } catch (error) { reportError(error); }
@@ -105,7 +105,7 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
     setConnecting(true);
     try {
       const state = await codexJson<CodexProject>(base, { appRoot }, "PUT");
-      setProject(state); setPath(state.appRoot ?? ""); setSettings(!state.appRoot); setApplied(null);
+      setProject(state); setPath(state.appRoot ?? ""); setSettings(false); setApplied(null);
     } catch (error) { reportError(error); }
     finally { setConnecting(false); }
   };
@@ -159,6 +159,35 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           </div>
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
+          <Popover open={settings} onOpenChange={(open) => { if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
+            <PopoverTrigger asChild>
+              <Button size="icon-sm" variant="ghost" className="relative" aria-label={project.appRoot ? "Manage linked app source" : "Link app source (optional)"} title={project.appRoot ? `App source: ${project.appRoot}` : "Link app source (optional)"}>
+                <CodeXmlIcon />
+                {project.appRoot && <span aria-hidden="true" className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={12} aria-label="App source settings" className="w-80 max-w-[calc(100vw-2rem)] max-h-[var(--radix-popover-content-available-height)] space-y-4 overflow-y-auto p-4">
+              <div className="space-y-1">
+                <h3 className="flex items-center gap-2 text-sm font-semibold"><CodeXmlIcon className="size-4 text-muted-foreground" />App source<span className="ml-auto text-[10px] font-normal text-muted-foreground">{project.appRoot ? "Linked · Read-only" : "Optional"}</span></h3>
+                {project.appRoot && <p className="truncate font-mono text-[11px] text-muted-foreground" title={project.appRoot}>{project.appRoot}</p>}
+              </div>
+          <form id="app-project-settings" className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting) void link(path.trim()); }}>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
+              <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
+              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</p>
+            </div>
+            {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
+            <div className="flex items-center justify-between gap-2">
+              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
+              <div className="flex items-center gap-1">
+                <Button type="button" size="sm" variant="ghost" disabled={connecting} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>
+                <Button size="sm" disabled={busy || connecting || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
+              </div>
+            </div>
+          </form>
+            </PopoverContent>
+          </Popover>
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
       </header>
@@ -170,31 +199,6 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
           finally { setConnecting(false); }
         }}>Sign in with ChatGPT</Button>}
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
-        <section className="overflow-hidden rounded-xl border border-border bg-background/60" aria-label="App project">
-          <button type="button" className="flex w-full items-center gap-2.5 p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => setSettings(!settings)} aria-expanded={settings} aria-controls="app-project-settings">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><FolderCodeIcon className="size-4 text-muted-foreground" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium">{project.appRoot ? project.appRoot.split(/[\\/]/).filter(Boolean).pop() || project.appRoot : "Link app source (optional)"}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" title={project.appRoot ?? undefined}>{project.appRoot || "Help Codex understand your app’s features"}</span>
-            </span>
-            <ChevronDownIcon className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${settings ? "rotate-180" : ""}`} />
-          </button>
-          {settings && <form id="app-project-settings" className="space-y-3 border-t border-border p-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting) void link(path.trim()); }}>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
-              <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
-              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</p>
-            </div>
-            {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
-            <div className="flex items-center justify-between gap-2">
-              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
-              <div className="flex items-center gap-1">
-                {project.appRoot && <Button type="button" size="sm" variant="ghost" disabled={connecting} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>}
-                <Button size="sm" disabled={busy || connecting || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
-              </div>
-            </div>
-          </form>}
-        </section>
         <label className="block text-xs text-muted-foreground" htmlFor="chat-scene">Screenshot · {context.locale}</label>
         <select id="chat-scene" className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs" value={context.sceneId} onChange={(event) => onScene(event.target.value)}>
           {scenes.map((scene, index) => <option key={scene.id} value={scene.id}>{index + 1}. {scene.headline[context.locale] || scene.id}</option>)}
