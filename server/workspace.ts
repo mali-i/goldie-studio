@@ -13,6 +13,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Plugin } from "vite";
 import { StudioCodex } from "./codex";
+import { readNotes, saveNotes, NotesError } from "./notes";
+import type { WorkspaceNotes } from "../src/notes";
 import { isLayoutKey, isTemplateKey, LAYOUTS, resolveScenes, TEMPLATES } from "../src/lib/layouts";
 import {
   DEFAULT_DEVICE_BY_PLATFORM,
@@ -76,6 +78,12 @@ function createHandler(root: string, codex: StudioCodex) {
       }
 
       const action = parts[3];
+      if (action === "notes" && parts.length === 4) {
+        await readProject(root, id);
+        if (req.method === "GET") return sendJson(res, await readNotes(projectDir(root, id)));
+        if (req.method === "PUT") return sendJson(res, await saveNotes(projectDir(root, id), await readJson<WorkspaceNotes>(req)));
+        return methodNotAllowed(res);
+      }
       if (action === "codex") {
         return await codex.handle(req, res, projectDir(root, id), await readProject(root, id), parts[4], () => readJson(req));
       }
@@ -151,7 +159,7 @@ function createHandler(root: string, codex: StudioCodex) {
       res.statusCode = 404;
       res.end("Not found");
     } catch (error) {
-      res.statusCode = error instanceof HttpError ? error.status : 500;
+      res.statusCode = error instanceof HttpError || error instanceof NotesError ? error.status : 500;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }

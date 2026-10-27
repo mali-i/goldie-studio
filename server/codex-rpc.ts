@@ -1,5 +1,25 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import { access } from "node:fs/promises";
+import { constants } from "node:fs";
+import { delimiter, join } from "node:path";
+import { homedir } from "node:os";
+
+/** GUI apps may add Codex to PATH while an ordinary terminal does not. */
+export async function resolveCodexExecutable(explicit?: string): Promise<string> {
+  if (explicit) return explicit;
+  if (process.platform === "win32") return "codex";
+  const candidates = (process.env.PATH ?? "").split(delimiter).filter(Boolean).map((directory) => join(directory, "codex"));
+  if (process.platform === "darwin") {
+    for (const directory of ["/Applications", join(homedir(), "Applications")]) {
+      candidates.push(join(directory, "ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"));
+    }
+  }
+  for (const candidate of candidates) {
+    try { await access(candidate, constants.X_OK); return candidate; } catch { /* Try the next installed location. */ }
+  }
+  return "codex"; // Spawn reports an actionable missing-runtime error.
+}
 
 type Packet = { id?: number | string; method?: string; params?: Record<string, any>; result?: any; error?: { message: string } };
 type Pending = { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
@@ -12,7 +32,7 @@ export class CodexRpc {
   private pending = new Map<number | string, Pending>();
   private listeners = new Set<(packet: Packet) => void>();
 
-  constructor(private executable = process.env.GOLDIE_CODEX_BIN || "codex") {}
+  constructor(private executable = process.env.GOLDIE_CODEX_BIN) {}
 
   async connect() {
     if (!this.ready) {
@@ -22,7 +42,14 @@ export class CodexRpc {
   }
 
   private async start() {
-    const child = spawn(this.executable, ["app-server", "--listen", "stdio://"], { stdio: "pipe" });
+    const executable = await resolveCodexExecutable(this.executable);
+    // Keep runtime/launcher process-group signals away from Vite and its shell.
+    // Detached still uses owned stdio pipes; do not unref the child.
+    const child = spawn(executable, ["app-server", "--listen", "stdio://"], {
+      stdio: "pipe",
+      detached: process.platform !== "win32",
+      windowsHide: true,
+    });
     this.child = child;
     // Drain diagnostics without exposing credentials or unbounded tool output.
     child.stderr.on("data", () => {});
@@ -57,7 +84,7 @@ export class CodexRpc {
     };
     child.on("error", () => failed(new Error("Codex could not start. Install Codex CLI or set GOLDIE_CODEX_BIN to its executable.")));
     child.stdin.on("error", () => failed(new Error("Codex disconnected. Reconnect and try again.")));
-    child.on("exit", (code) => failed(new Error(`Codex exited${code === null ? "" : ` (${code})`}. Check the CLI setup and access to its state directory, then reconnect.`)));
+    child.on("exit", (code, signal) => failed(new Error(`Codex exited${signal ? ` (${signal})` : code === null ? "" : ` (${code})`}. Check the CLI setup and access to its state directory, then reconnect.`)));
     if (!child.pid) throw new Error("Codex could not start. Install Codex CLI or set GOLDIE_CODEX_BIN to its executable.");
     await this.request("initialize", { clientInfo: { name: "goldie_studio", title: "Goldie Studio", version: "0.1.0" } });
     child.stdin.write(JSON.stringify({ method: "initialized" }) + "\n");
@@ -83,9 +110,11 @@ export class CodexRpc {
   close() {
     const child = this.child;
     if (!child) return;
-    child.kill();
     this.child = undefined;
     this.ready = undefined;
+    // Node can report a ChildProcess before spawn fails with ENOENT. Its handle
+    // still has PID 0: kill() would signal Studio's entire process group.
+    if (child.pid !== undefined && child.pid > 0 && child.exitCode === null && child.signalCode === null) child.kill();
     for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error("Codex connection closed.")); }
     this.pending.clear();
     for (const listener of this.listeners) listener({ method: "studio/disconnected", params: { message: "Codex connection closed." } });

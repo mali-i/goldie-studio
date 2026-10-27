@@ -26,8 +26,10 @@ Link the absolute path to your app's source directory. Studio starts its own
 `codex app-server` process and uses the local Codex authentication/provider
 configuration; no API key is stored in the browser. If needed, choose
 **Sign in with ChatGPT** and follow the browser link, or authenticate with
-the Codex CLI first. If the executable is not on your PATH, start Studio with
-`GOLDIE_CODEX_BIN=/absolute/path/to/codex bun run dev`.
+the Codex CLI first. Studio checks your PATH and, on macOS, the bundled Codex
+executable in an installed ChatGPT app. To select another executable, start
+Studio with `GOLDIE_CODEX_BIN=/absolute/path/to/codex bun run dev`. A missing
+or invalid executable shows a connection error without stopping the web server.
 
 Select a scene in the assistant, or open a screenshot on the canvas to select
 it. Each message includes the selected scene, device, language, current
@@ -70,3 +72,23 @@ part of the original project's GitHub fork network.
 
 Thanks to the original authors and contributors for their work.
 See [LICENSE](LICENSE) for the license and attribution details.
+
+### Workspace value notes
+
+Open **Value notes** above the canvas to collect your thinking across the whole
+workspace. **Current understanding** is a freeform plain-text document; write,
+paste and revise it yourself. It saves automatically, with up to 20 previous
+versions available to restore.
+
+Select text in a Codex reply and choose **Highlight**. The highlighted passage
+appears in **Excerpts**, where you can copy it, return to its source, or remove
+the highlight. Excerpts keep a text snapshot even if linking a different app
+starts a new conversation. Notes belong to the workspace, independently of any
+screenshot, device or language. There are no annotations or automatic document
+insertion in this MVP.
+
+Notes are stored in each project folder as `goldie.notes.json`, separately from
+design config and chat history. Unsaved edits also have a browser-local recovery
+draft. Saving errors are shown with a retry action; conflicting edits from another
+window are rejected instead of silently overwritten. If a conflict occurs, copy
+your draft before reloading and reconcile it with the saved version.

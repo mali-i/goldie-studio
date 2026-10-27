@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
+import { NotesPanel } from "./components/NotesPanel";
+import { useWorkspaceNotes } from "./lib/useWorkspaceNotes";
+import type { Excerpt } from "./notes";
 import { CodexPanel } from "./components/CodexPanel";
 import { Button } from "./components/ui/button";
 import { PreviewCanvas } from "./components/PreviewCanvas";
@@ -232,6 +235,9 @@ function Loaded({
   };
   const knownLayout = (key: string | undefined) =>
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
+  const notes = useWorkspaceNotes(projectId, !manifest.demo);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteSource, setNoteSource] = useState<Excerpt | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const chatTrigger = useRef<HTMLButtonElement>(null);
   const [chatScene, setChatScene] = useState(design.scenes[0]?.id ?? "");
@@ -414,7 +420,7 @@ function Loaded({
   const chatSubhead = selectedScene ? (copy[selectedScene.id]?.subhead?.[locale] ?? selectedScene.subhead?.[locale] ?? "") : "";
 
   return (
-    <div className={`flex h-full bg-stage p-3 text-foreground ${chatOpen ? "[&>aside:first-child]:hidden xl:[&>aside:first-child]:flex" : ""}`}>
+    <div className={`flex h-full bg-stage p-3 text-foreground ${chatOpen || notesOpen ? "[&>aside:first-child]:hidden xl:[&>aside:first-child]:flex" : ""}`}>
       <Sidebar
         projectId={projectId}
         projects={projects}
@@ -458,13 +464,14 @@ function Loaded({
         <PreviewCanvas
           enabled={Boolean(spec && captures && design.scenes.length > 0)}
           label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
-          toolbarActions={!manifest.demo && !chatOpen ? (
-            <Button ref={chatTrigger} size="sm" variant="outline"
+          toolbarActions={!manifest.demo ? <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 rounded-full" title={notes.error || notes.status} aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}>Value notes{notes.error ? " ⚠" : ""}{notes.notes.excerpts.length ? ` · ${notes.notes.excerpts.length}` : ""}</Button>
+            {!chatOpen && <Button ref={chatTrigger} size="sm" variant="outline"
               className="h-8 gap-2 rounded-full border-sidebar-border bg-sidebar px-3.5 shadow-sm hover:bg-muted"
               aria-expanded={false} aria-controls="codex-panel" onClick={() => setChatOpen(true)}>
               <PanelRightOpenIcon className="size-3.5 text-muted-foreground" />Discuss with Codex
-            </Button>
-          ) : undefined}
+            </Button>}
+          </div> : undefined}
         >
           {spec && captures && design.scenes.length > 0 ? (
             <div className="w-full">
@@ -512,7 +519,10 @@ function Loaded({
         </PreviewCanvas>
       </div>
 
+      {notesOpen && !manifest.demo && <NotesPanel controller={notes} onClose={() => setNotesOpen(false)} onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }} />}
       {chatOpen && !manifest.demo && <CodexPanel
+        notes={notes}
+        source={noteSource}
         projectId={projectId}
         scenes={design.scenes}
         context={{ sceneId: selectedScene?.id ?? "", device, locale, headline: chatHeadline, subhead: chatSubhead }}

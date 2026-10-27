@@ -1,11 +1,16 @@
 import { ArrowUpIcon, ChevronDownIcon, FolderCodeIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
+import { HighlightText } from "./HighlightText";
+import type { NotesController } from "../lib/useWorkspaceNotes";
+import type { Excerpt } from "../notes";
 import type { DesignScene } from "../manifest";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onApply, onUndo, canUndo, onClose }: {
+export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
+  notes: NotesController;
+  source: Excerpt | null;
   projectId: string;
   scenes: DesignScene[];
   context: Omit<ChatInput, "message">;
@@ -30,6 +35,8 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
   const [loginUrl, setLoginUrl] = useState("");
   const [applied, setApplied] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const viewedSource = useRef<Excerpt | null>(null);
+  const [sourceError, setSourceError] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
 
@@ -82,6 +89,16 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
     return () => clearInterval(timer);
   }, [loginUrl, busy]);
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [project.messages, activity]);
+
+  useEffect(() => {
+    if (!source || connecting || viewedSource.current === source) return;
+    viewedSource.current = source;
+    const element = document.getElementById(`chat-message-${source.messageId}`);
+    if (!element) { setSourceError("The source conversation is no longer available. Your excerpt is still saved."); return; }
+    setSourceError("");
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.focus({ preventScroll: true });
+  }, [source, connecting, project.messages]);
 
   const link = async (appRoot: string | null) => {
     setError("");
@@ -189,9 +206,12 @@ export function CodexPanel({ projectId, scenes, context, imageUrl, onScene, onAp
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-label="Project conversation">
         {!project.messages.length && <div className="py-6 text-sm leading-relaxed text-muted-foreground"><p>What should this screenshot say?</p><p className="mt-2 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
-        {project.messages.map((message) => <article key={message.id} className={`rounded-xl p-3 text-sm ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
+        {sourceError && <p role="status" className="text-xs text-muted-foreground">{sourceError}</p>}
+        {project.messages.map((message) => <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={`rounded-xl p-3 text-sm focus:outline-2 focus:outline-amber-400 ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.sceneId} · {message.locale}</p>
-          <p className="whitespace-pre-wrap break-words leading-relaxed">{message.text}</p>
+          {message.role === "assistant" ? <HighlightText text={message.text} disabled={!notes.ready} excerpts={notes.notes.excerpts.filter((e) => e.messageId === message.id)} onHighlight={(start, end) => {
+            notes.update((n) => n.excerpts.some((e) => e.messageId === message.id && e.start === start && e.end === end) ? n : ({ ...n, excerpts: [...n.excerpts, { id: crypto.randomUUID(), messageId: message.id, start, end, text: message.text.slice(start, end), createdAt: new Date().toISOString() }] }));
+          }} /> : <p className="whitespace-pre-wrap break-words leading-relaxed">{message.text}</p>}
           {message.proposal && <div className="mt-3 space-y-2 border-t border-border pt-3">
             <p className="font-semibold">{message.proposal.headline}</p><p className="text-xs text-muted-foreground">{message.proposal.subhead}</p>
             <Button size="sm" variant="outline" disabled={message.sceneId !== context.sceneId || message.locale !== context.locale} onClick={() => {
