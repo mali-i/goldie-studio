@@ -147,9 +147,9 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   const send = async () => {
-    if (!draft.trim() || busy || connecting || !selectedFrames.length) return;
-    const primary = selectedFrames[0]!;
-    const input: ChatInput = { ...context, sessionId: project.activeSessionId, sceneId: primary.sceneId, headline: primary.headline, subhead: primary.subhead, frames: selectedFrames, message: draft.trim() };
+    if (!draft.trim() || !status?.authenticated || busy || connecting) return;
+    const primary = selectedFrames[0];
+    const input: ChatInput = { ...context, sessionId: project.activeSessionId, sceneId: primary?.sceneId ?? "", headline: primary?.headline ?? "", subhead: primary?.subhead ?? "", frames: selectedFrames, message: draft.trim() };
     const optimistic: ChatMessage = { ...input, id: crypto.randomUUID(), role: "user", text: input.message };
     setProject((prev) => ({ ...prev, messages: [...prev.messages, optimistic] }));
     setDraft(""); setBusy(true); setError(""); setActivity("Connecting to Codex…");
@@ -280,13 +280,13 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy || connecting}
           onChange={setDraft} onSelect={(frame) => { setSelectedFrameIds([...new Set([...selectedFrames.map((item) => item.id), frame.id])]); onScene(frame.sceneId); }}
           onRemove={(id) => setSelectedFrameIds(selectedFrames.filter((frame) => frame.id !== id).map((frame) => frame.id))} onSend={() => void send()} />
-        {!selectedFrames.length && <p className="text-xs text-muted-foreground">Type @ to choose a Frame before sending.</p>}
+        {!selectedFrames.length && <p className="text-xs text-muted-foreground">Frames are optional. Type @ to add screenshot context.</p>}
         <div className="flex items-center justify-between">
           <Button type="button" size="sm" variant="ghost" disabled={!canUndo} onClick={() => { onUndo(); setApplied(null); }}><Undo2Icon />Undo last edit</Button>
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
             catch (error) { reportError(error); }
-          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !selectedFrames.length || connecting}><ArrowUpIcon />Send</Button>}
+          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
       </div>

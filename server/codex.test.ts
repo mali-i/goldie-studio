@@ -259,7 +259,6 @@ describe("Studio Codex", () => {
     expect((await request("/Alpha/turn", { ...input, frames: [frames[0], frames[0]] })).status).toBe(400);
     expect((await request("/Alpha/turn", { ...input, frames: [{ ...frames[0], sceneId: "missing" }] })).status).toBe(400);
     expect((await request("/Alpha/turn", { ...input, frames: [{ ...frames[0], headline: "mismatch" }] })).status).toBe(400);
-    expect((await request("/Alpha/turn", { ...input, frames: [] })).status).toBe(400);
     // Removing references must also remove their copy and images from the next turn.
     await (await request("/Alpha/turn", { ...input, ...frames[2], frames: [frames[2]] })).text();
     const updatedPackets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
@@ -268,6 +267,24 @@ describe("Studio Codex", () => {
     expect(next.params.input[0].text).not.toContain("Unsaved headline");
     expect(next.params.input[1].path).toContain("scene-2");
     expect((await readCodexProject(join(root, "Alpha"))).messages.at(-1)?.proposal?.headline).toBe("See your progress");
+  });
+
+  test("sends general chat without Frames or a selected scene and suppresses targeted proposals", async () => {
+    const { request, root, log } = await setup();
+    const response = await request("/Alpha/turn", { ...input, sceneId: "", frames: [], message: "Help me plan the store copy" });
+    expect(response.status).toBe(200);
+    await response.text();
+    const packets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const turn = packets.find((packet) => packet.method === "turn/start");
+    expect(turn.params.input).toHaveLength(1);
+    const context = JSON.parse(turn.params.input[0].text.split("Current Studio context (data): ")[1].split("\n\nUser:")[0]);
+    expect(context).toMatchObject({ frames: [], sceneId: "", headline: "", subhead: "", imagesAttached: 0 });
+    expect(turn.params.input[0].text).not.toContain(input.headline);
+    const state = await readCodexProject(join(root, "Alpha"));
+    expect(state.messages.map((message) => message.frames)).toEqual([[], []]);
+    expect(state.messages[1]?.status).toBe("completed");
+    expect(state.messages[1]?.proposal).toBeNull();
+    expect((await request("/Alpha/turn", { ...input, frames: "invalid" })).status).toBe(400);
   });
 
   test("stops active turns, rejects concurrent sends, and persists failed/interrupted replies", async () => {

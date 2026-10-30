@@ -59,7 +59,7 @@ export function FrameComposer({ frames, selected, locale, value, disabled, onCha
       setMention(null);
       input.current?.focus();
     }}><XIcon className="size-3" /></button></div>)}</div>}
-    <textarea ref={input} aria-label="Message Codex" aria-expanded={open} aria-controls={open ? "chat-frame-options" : undefined} aria-activedescendant={open && matches.length ? `frame-option-${activeIndex}` : undefined} aria-autocomplete="list" className="min-h-20 w-full resize-none rounded-xl bg-transparent p-3 text-sm outline-none disabled:opacity-50" placeholder="Type @ to add Frames. What should we emphasize?" value={value} maxLength={16000} disabled={disabled}
+    <textarea ref={input} aria-label="Message Codex" aria-expanded={open} aria-controls={open ? "chat-frame-options" : undefined} aria-activedescendant={open && matches.length ? `frame-option-${activeIndex}` : undefined} aria-autocomplete="list" className="min-h-20 w-full resize-none rounded-xl bg-transparent p-3 text-sm outline-none disabled:opacity-50" placeholder="Message Codex. Type @ to add Frames (optional)." value={value} maxLength={16000} disabled={disabled}
       onChange={(event) => { onChange(event.target.value); updateMention(event.target.value, event.target.selectionStart); }}
       onClick={(event) => updateMention(value, event.currentTarget.selectionStart)}
       onBlur={() => setMention(null)}
