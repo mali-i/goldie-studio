@@ -49,7 +49,7 @@ export function ChatSessions({ sessions, activeId, disabled, onSelect, onCreate,
     <section id="chat-directory" aria-label="Chat history" className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
         <Button size="icon-xs" variant="ghost" aria-label="Back to chat" title="Back to chat" className="text-muted-foreground" onClick={onBack}><ArrowLeftIcon /></Button>
-        <h3 className="flex-1 text-sm font-medium">Conversations <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">{history.length}</span></h3>
+        <h3 className="flex-1 text-sm font-medium">Conversations</h3>
         <Button ref={searchToggle} size="icon-xs" variant={searchOpen ? "secondary" : "ghost"} aria-label={searchOpen ? "Close search" : "Search chats"} title={searchOpen ? "Close search" : "Search chats"} aria-expanded={searchOpen} aria-controls="chat-search" onClick={() => { if (searchOpen) closeSearch(); else setSearchOpen(true); }}><SearchIcon /></Button>
         <Button size="xs" variant="ghost" disabled={disabled || !activeId} onClick={() => void onCreate()}><SquarePenIcon />New chat</Button>
       </header>
