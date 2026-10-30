@@ -265,3 +265,61 @@ body,
   content: attr(data-placeholder);
   opacity: 0.4;
 }
+
+/* Agent replies: readable Markdown within the narrow assistant panel. */
+.agent-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.agent-markdown > * + * { margin-top: 0.85em; }
+.agent-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 1.25em;
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.agent-markdown h1 { font-size: 1.2em; }
+.agent-markdown h2 { font-size: 1.1em; }
+.agent-markdown > :first-child { margin-top: 0; }
+.agent-markdown :is(ul, ol) { padding-left: 1.5em; }
+.agent-markdown ul { list-style: disc; }
+.agent-markdown ol { list-style: decimal; }
+.agent-markdown li + li { margin-top: 0.4em; }
+.agent-markdown li > :is(ul, ol, p) { margin-top: 0.35em; }
+.agent-markdown li::marker { color: var(--muted-foreground); }
+.agent-markdown strong { font-weight: 600; }
+.agent-markdown a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.agent-markdown a:hover { opacity: 0.8; }
+.agent-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+}
+.agent-markdown :not(pre) > code {
+  border-radius: 4px;
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  font-size: 0.9em;
+}
+.agent-markdown pre {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.agent-markdown .agent-table-scroll { overflow-x: auto; }
+.agent-markdown table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 12px; }
+.agent-markdown :is(th, td) { border: 1px solid var(--border); padding: 6px 9px; text-align: left; }
+.agent-markdown th { background: var(--muted); font-weight: 600; }
+.agent-markdown hr { border: 0; border-top: 1px solid var(--border); margin-block: 1em; }
+.agent-markdown mark { border-radius: 2px; background: #fde68acc; color: inherit; }
+.dark .agent-markdown mark { background: #a1620799; }
+.agent-markdown .contains-task-list { list-style: none; padding-left: 0; }
+.agent-markdown input[type="checkbox"] { margin-right: 0.5em; vertical-align: middle; }

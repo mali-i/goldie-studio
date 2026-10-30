@@ -47,7 +47,10 @@ Before explicitly choosing references, opening a promotional image on the
 canvas sets the initial Frame. Each message also includes the current device
 and language.
 Codex can read relevant app code to ground its suggestions. Tool activity
-appears while it works; the conversational reply and optional copy proposal
+appears while it works. Replies render Markdown headings, emphasis, lists,
+quotes, links, tables, and code blocks. Wide tables and code scroll horizontally;
+text highlighting still points to the original reply, including existing excerpts.
+The conversational reply and optional copy proposal
 appear when the turn finishes. **Apply copy** changes both text fields in one
 undo step and follows the existing autosave/export flow. Use **Undo last edit**
 or the editor's Cmd/Ctrl+Z to undo. **Stop** interrupts an active reply;
