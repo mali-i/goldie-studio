@@ -234,8 +234,8 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         }}>Sign in with ChatGPT</Button>}
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
       </div>}
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-label="Project conversation">
-        {!project.messages.length && <div className="py-6 text-sm leading-relaxed text-muted-foreground"><p>What should this Frame say?</p><p className="mt-2 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
+      <div className={`min-h-0 flex-1 overflow-y-auto p-4 ${project.messages.length ? "space-y-4" : "flex flex-col"}`} role="log" aria-label="Project conversation">
+        {!project.messages.length && <div className="flex flex-1 flex-col items-center justify-center py-6 text-center text-sm leading-relaxed text-muted-foreground"><p>What should this Frame say?</p><p className="mt-2 max-w-64 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
         {sourceError && <p role="status" className="text-xs text-muted-foreground">{sourceError}</p>}
         {project.messages.map((message) => <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={`rounded-xl p-3 text-sm focus:outline-2 focus:outline-amber-400 ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.frames?.map((frame) => frame.label).join(", ") || message.sceneId} · {message.locale}</p>
