@@ -381,6 +381,7 @@ export function Strip({
     return (
       <Tile
         key={entry.key}
+        label={entry.editable ? `Frame ${entries.slice(0, i + 1).filter((item) => item.editable).length}` : "App preview"}
         draggable={entry.sceneId !== undefined}
         width={entry.width}
         height={entry.height}
@@ -1464,6 +1465,7 @@ function PreviewScene({ segments }: { segments: Array<{ url: string; durationSec
  * the drag; a click still opens the lightbox.
  */
 function Tile({
+  label,
   width,
   height,
   bad,
@@ -1473,6 +1475,7 @@ function Tile({
   draggable,
   children,
 }: {
+  label: string;
   width: number;
   height: number;
   bad: boolean;
@@ -1484,10 +1487,11 @@ function Tile({
 }) {
   return (
     <div>
+      <p className="mb-2 truncate text-xs font-medium text-muted-foreground">{label}</p>
       <button
         type="button"
         aria-label={
-          draggable ? "Open full-size preview (drag to reorder)" : "Open full-size preview"
+          `${label}: ${draggable ? "Open full-size preview (drag to reorder)" : "Open full-size preview"}`
         }
         title={draggable ? "Drag to reorder" : undefined}
         data-canvas-tile={draggable ? "" : undefined}
