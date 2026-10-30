@@ -112,7 +112,7 @@ See [LICENSE](LICENSE) for the license and attribution details.
 
 Open **Value notes** above the canvas to collect your thinking across the whole
 workspace. **Notes** is a collection of cards: create a note for each idea, open
-a card to edit its title and plain-text document, or delete a card when it is no
+a card to expand its title and text editor directly in the list, or delete it when no
 longer needed. Every card saves automatically and keeps up to 20 previous text
 versions available to restore. Existing single-document notes and their history
 are preserved in a **Current understanding** card.
