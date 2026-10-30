@@ -1,5 +1,6 @@
-import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquarePenIcon, SquareIcon, Undo2Icon } from "lucide-react";
+import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquarePenIcon, SquareIcon, Undo2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Dialog } from "radix-ui";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
 import { HighlightText } from "./HighlightText";
 import type { NotesController } from "../lib/useWorkspaceNotes";
@@ -9,7 +10,6 @@ import { ChatSessions } from "./ChatSessions";
 import { FrameComposer } from "./FrameComposer";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function CodexPanel({ projectId, frames, context, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
   notes: NotesController;
@@ -45,6 +45,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const viewedSource = useRef<Excerpt | null>(null);
   const [sourceError, setSourceError] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const mounted = useRef(true);
 
   const reportError = (error: unknown) => {
@@ -164,7 +165,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   return (
-    <aside id="codex-panel" aria-label="Codex assistant" className="fixed inset-y-3 right-3 z-30 flex w-[380px] max-w-[calc(100vw-1.5rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground md:static md:z-auto md:ml-3 md:h-full md:min-w-[320px] md:max-w-[42vw]">
+    <aside ref={panel} id="codex-panel" aria-label="Codex assistant" className="fixed inset-y-3 right-3 z-30 flex w-[380px] max-w-[calc(100vw-1.5rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground md:relative md:inset-auto md:z-auto md:ml-3 md:h-full md:min-w-[320px] md:max-w-[42vw]">
       {!directoryOpen && <header className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <Button size="icon" variant={directoryOpen ? "secondary" : "outline"} className="shrink-0" aria-label={directoryOpen ? "Return to chat" : "Browse chat history"} aria-pressed={directoryOpen} aria-controls="chat-directory" title={directoryOpen ? "Return to chat" : "Conversations"} onClick={() => { setDirectoryOpen((open) => !open); setSettings(false); }}><MessageSquareIcon className="size-4" /></Button>
@@ -187,25 +188,29 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
           <Button size="icon-sm" variant="ghost" aria-label="New chat" title="New chat" disabled={busy || connecting || !project.activeSessionId} onClick={() => { setSettings(false); void changeSession(); }}><SquarePenIcon /></Button>
-          <Popover open={settings} onOpenChange={(open) => { if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
-            <PopoverTrigger asChild>
+          <Dialog.Root open={settings} onOpenChange={(open) => { if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
+            <Dialog.Trigger asChild>
               <Button size="icon-sm" variant="ghost" className="relative" aria-label={project.appRoot ? "Manage linked app source" : "Link app source (optional)"} title={project.appRoot ? `App source: ${project.appRoot}` : "Link app source (optional)"}>
                 <CodeXmlIcon />
                 {project.appRoot && <span aria-hidden="true" className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar" />}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" sideOffset={12} aria-label="App source settings" className="w-80 max-w-[calc(100vw-2rem)] max-h-[var(--radix-popover-content-available-height)] space-y-4 overflow-y-auto p-4">
+            </Dialog.Trigger>
+            <Dialog.Portal container={panel.current}>
+              <Dialog.Overlay className="absolute inset-0 z-50 bg-black/15 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+              <Dialog.Content className="absolute left-1/2 top-1/2 z-50 max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+                <Dialog.Close asChild><Button size="icon-xs" variant="ghost" className="absolute right-4 top-4" aria-label="Close app source settings"><XIcon /></Button></Dialog.Close>
               <div className="space-y-1">
-                <h3 className="flex items-center gap-2 text-sm font-semibold"><CodeXmlIcon className="size-4 text-muted-foreground" />App source<span className="ml-auto text-[10px] font-normal text-muted-foreground">{project.appRoot ? "Linked · Read-only" : "Optional"}</span></h3>
+                <Dialog.Title className="flex items-center gap-2 pr-7 text-sm font-semibold"><CodeXmlIcon className="size-4 text-muted-foreground" />App source<span className="ml-auto text-[10px] font-normal text-muted-foreground">{project.appRoot ? "Linked · Read-only" : "Optional"}</span></Dialog.Title>
                 {project.appRoot && <p className="truncate font-mono text-[11px] text-muted-foreground" title={project.appRoot}>{project.appRoot}</p>}
               </div>
           <form id="app-project-settings" className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting) void link(path.trim()); }}>
             <div className="space-y-1.5">
               <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
               <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
-              <p id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</p>
+              <Dialog.Description id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</Dialog.Description>
             </div>
             {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
+            {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between gap-2">
               {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
               <div className="flex items-center gap-1">
@@ -214,8 +219,9 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
               </div>
             </div>
           </form>
-            </PopoverContent>
-          </Popover>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
       </header>}
