@@ -5,6 +5,7 @@ import { HighlightText } from "./HighlightText";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import type { Excerpt } from "../notes";
 import type { ChatFrame } from "../lib/chatFrames";
+import { ChatSessions } from "./ChatSessions";
 import { FrameComposer } from "./FrameComposer";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -27,6 +28,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const [status, setStatus] = useState<CodexStatus | null>(null);
   const [path, setPath] = useState("");
   const [settings, setSettings] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [selectedFrameIds, setSelectedFrameIds] = useState<string[] | null>(null);
   const selectedFrames = selectedFrameIds === null
@@ -96,13 +98,19 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
 
   useEffect(() => {
     if (!source || connecting || viewedSource.current === source) return;
+    const session = project.sessions?.find((item) => item.messages.some((message) => message.id === source.messageId));
+    if (session && session.id !== project.activeSessionId) {
+      if (!busy) void changeSession(session.id);
+      return;
+    }
+    if (directoryOpen) { setDirectoryOpen(false); return; }
     viewedSource.current = source;
     const element = document.getElementById(`chat-message-${source.messageId}`);
     if (!element) { setSourceError("The source conversation is no longer available. Your excerpt is still saved."); return; }
     setSourceError("");
     element.scrollIntoView({ behavior: "smooth", block: "center" });
     element.focus({ preventScroll: true });
-  }, [source, connecting, project.messages]);
+  }, [source, connecting, busy, directoryOpen, project.messages]);
 
   const link = async (appRoot: string | null) => {
     setError("");
@@ -114,10 +122,21 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
     finally { setConnecting(false); }
   };
 
+  const changeSession = async (sessionId?: string) => {
+    if (busy || connecting) return;
+    setConnecting(true); setError("");
+    try {
+      const state = await codexJson<CodexProject>(`${base}/sessions`, sessionId ? { sessionId } : {});
+      if (!mounted.current) return;
+      setProject(state); setPath(state.appRoot ?? ""); setDraft(""); setApplied(null); setSourceError(""); setDirectoryOpen(false);
+    } catch (error) { viewedSource.current = source; reportError(error); }
+    finally { if (mounted.current) setConnecting(false); }
+  };
+
   const send = async () => {
-    if (!draft.trim() || busy || !selectedFrames.length) return;
+    if (!draft.trim() || busy || connecting || !selectedFrames.length) return;
     const primary = selectedFrames[0]!;
-    const input: ChatInput = { ...context, sceneId: primary.sceneId, headline: primary.headline, subhead: primary.subhead, frames: selectedFrames, message: draft.trim() };
+    const input: ChatInput = { ...context, sessionId: project.activeSessionId, sceneId: primary.sceneId, headline: primary.headline, subhead: primary.subhead, frames: selectedFrames, message: draft.trim() };
     const optimistic: ChatMessage = { ...input, id: crypto.randomUUID(), role: "user", text: input.message };
     setProject((prev) => ({ ...prev, messages: [...prev.messages, optimistic] }));
     setDraft(""); setBusy(true); setError(""); setActivity("Connecting to Codex…");
@@ -134,18 +153,19 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
     finally {
       abort.current = null;
       if (mounted.current) {
-        setBusy(false); setActivity("");
-        // The server's persisted history is authoritative, including failures and cancellations.
-        codexJson<CodexProject>(base).then(setProject).catch(() => {});
+        // Keep chat switching disabled until the authoritative history has been recovered.
+        try { const state = await codexJson<CodexProject>(base); if (mounted.current) setProject(state); }
+        catch (error) { reportError(error); }
+        if (mounted.current) { setBusy(false); setActivity(""); }
       }
     }
   };
 
   return (
-    <aside id="codex-panel" aria-label="Codex assistant" className="ml-3 flex h-full w-[380px] max-w-[42vw] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside id="codex-panel" aria-label="Codex assistant" className="fixed inset-y-3 right-3 z-30 flex w-[380px] max-w-[calc(100vw-1.5rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground md:static md:z-auto md:ml-3 md:h-full md:min-w-[320px] md:max-w-[42vw]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background"><MessageSquareIcon className="size-4 text-muted-foreground" /></span>
+          <Button size="icon" variant={directoryOpen ? "secondary" : "outline"} className="shrink-0" aria-label={directoryOpen ? "Return to chat" : "Browse chat history"} aria-pressed={directoryOpen} aria-controls="chat-directory" title={directoryOpen ? "Return to chat" : "Conversations"} onClick={() => { setDirectoryOpen((open) => !open); setSettings(false); }}><MessageSquareIcon className="size-4" /></Button>
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="shrink-0 text-sm font-semibold">Codex</h2>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground" role="status" title={status?.account}>
@@ -196,6 +216,13 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
       </header>
+      {directoryOpen && <>
+        {error && <p role="alert" className="shrink-0 px-4 pt-3 text-xs text-destructive">{error}</p>}
+        <ChatSessions sessions={project.sessions ?? []} activeId={project.activeSessionId}
+          disabled={busy || connecting} onSelect={changeSession} onCreate={() => changeSession()} onBack={() => setDirectoryOpen(false)} />
+        {busy && <p role="status" className="shrink-0 border-t border-border px-4 py-3 text-xs text-muted-foreground">A reply is running. Return to chat to stop it before switching conversations.</p>}
+      </>}
+      <div className={`${directoryOpen ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}>
       {(status?.available && !status.authenticated || loginUrl) && <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
         {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting} onClick={async () => {
           setConnecting(true); setError("");
@@ -226,7 +253,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
       </div>
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
-        <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy}
+        <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy || connecting}
           onChange={setDraft} onSelect={(frame) => { setSelectedFrameIds([...new Set([...selectedFrames.map((item) => item.id), frame.id])]); onScene(frame.sceneId); }}
           onRemove={(id) => setSelectedFrameIds(selectedFrames.filter((frame) => frame.id !== id).map((frame) => frame.id))} onSend={() => void send()} />
         {!selectedFrames.length && <p className="text-xs text-muted-foreground">Type @ to choose a Frame before sending.</p>}
@@ -238,6 +265,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || !selectedFrames.length || connecting}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
+      </div>
     </aside>
   );
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isAbsolute, join, relative, sep } from "node:path";
-import type { ChatEvent, ChatInput, ChatMessage, CodexProject, CodexStatus } from "../src/codex";
+import type { ChatEvent, ChatInput, ChatMessage, CodexProject, CodexSession, CodexStatus } from "../src/codex";
 import type { ProjectDetail } from "../src/project";
 import { CodexRpc } from "./codex-rpc";
 
@@ -31,18 +31,45 @@ export function assertLocalRequest(req: IncomingMessage) {
   if (req.headers["sec-fetch-site"] === "cross-site") throw new Error("Cross-site Codex requests are not allowed.");
 }
 
+function newSession(appRoot: string | null): CodexSession {
+  const now = new Date().toISOString();
+  return { id: randomUUID(), title: "New chat", createdAt: now, updatedAt: now, appRoot, messages: [] };
+}
+
+function selectSession(state: CodexProject, session: CodexSession): CodexProject {
+  return { sessions: state.sessions, activeSessionId: session.id, appRoot: session.appRoot,
+    lastAppRoot: session.lastAppRoot, threadId: session.threadId, messages: session.messages };
+}
+
 export async function readCodexProject(directory: string): Promise<CodexProject> {
-  try { return JSON.parse(await readFile(join(directory, "goldie.codex.json"), "utf8")); }
+  let state: CodexProject;
+  try { state = JSON.parse(await readFile(join(directory, "goldie.codex.json"), "utf8")); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { appRoot: null, messages: [] };
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    state = { appRoot: null, messages: [] };
   }
+  if (!state.sessions?.length) {
+    // A stable ID keeps legacy reads consistent until the first write migrates the file.
+    const session: CodexSession = { ...newSession(state.appRoot), ...state, id: "legacy",
+      title: state.messages.find((message) => message.role === "user")?.text.slice(0, 60) || "New chat" };
+    state.sessions = [session];
+    state.activeSessionId = session.id;
+  }
+  const active = state.sessions.find((session) => session.id === state.activeSessionId);
+  if (!active) throw new Error("Saved chat is unavailable.");
+  return selectSession(state, active);
 }
 
 async function saveProject(directory: string, state: CodexProject) {
+  const session = state.sessions?.find((session) => session.id === state.activeSessionId);
+  if (!session) throw new Error("Saved chat is unavailable.");
+  Object.assign(session, { appRoot: state.appRoot, lastAppRoot: state.lastAppRoot,
+    threadId: state.threadId, messages: state.messages, updatedAt: new Date().toISOString(),
+    title: state.messages.find((message) => message.role === "user")?.text.slice(0, 60) || "New chat" });
   const file = join(directory, "goldie.codex.json");
   const temporary = `${file}.${randomUUID()}.tmp`;
-  await writeFile(temporary, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+  // Store each history once; top-level fields are a compatibility projection for the API.
+  await writeFile(temporary, JSON.stringify({ activeSessionId: state.activeSessionId, sessions: state.sessions }, null, 2) + "\n", { mode: 0o600 });
   await rename(temporary, file);
 }
 
@@ -121,6 +148,26 @@ export class StudioCodex {
       const result = await this.rpc.request("account/login/start", { type: "chatgpt" });
       return send({ authUrl: result.authUrl });
     }
+    if (action === "sessions" && req.method === "POST") {
+      if (this.active.has(directory)) throw new Error("Stop the active reply before changing chats.");
+      this.active.set(directory, { cancel: () => {} });
+      try {
+        const input = await body();
+        const state = await readCodexProject(directory);
+        let session: CodexSession;
+        if (input.sessionId !== undefined) {
+          const existing = state.sessions!.find((item) => item.id === input.sessionId);
+          if (!existing) throw new Error("Chat not found.");
+          session = existing;
+        } else {
+          session = newSession(state.appRoot);
+          state.sessions!.push(session);
+        }
+        const next = selectSession(state, session);
+        await saveProject(directory, next);
+        return send(next);
+      } finally { this.active.delete(directory); }
+    }
     if (!action && req.method === "PUT") {
       if (this.active.has(directory)) throw new Error("Stop the active reply before changing projects.");
       this.active.set(directory, { cancel: () => {} });
@@ -132,9 +179,14 @@ export class StudioCodex {
         // cannot accidentally carry A's conversation into B.
         const previousApp = state.appRoot ?? state.lastAppRoot;
         const changedApp = appRoot !== null && previousApp !== undefined && previousApp !== appRoot;
-        const next: CodexProject = changedApp
-          ? { appRoot, lastAppRoot: appRoot, messages: [] }
-          : { ...state, appRoot, ...(appRoot || previousApp ? { lastAppRoot: appRoot ?? previousApp } : {}) };
+        let next: CodexProject;
+        if (changedApp) {
+          const session = newSession(appRoot);
+          state.sessions!.push(session);
+          next = selectSession(state, session);
+        } else {
+          next = { ...state, appRoot, ...(appRoot || previousApp ? { lastAppRoot: appRoot ?? previousApp } : {}) };
+        }
         await saveProject(directory, next);
         return send(next);
       } finally { this.active.delete(directory); }
@@ -168,6 +220,7 @@ export class StudioCodex {
     res.on("close", onClose);
     try {
       const state = await readCodexProject(directory);
+      if (input.sessionId !== undefined && input.sessionId !== state.activeSessionId) throw new Error("The active chat changed. Refresh before sending.");
       savedState = state;
       // An empty working directory avoids using Studio's own source as app context.
       const unlinkedCwd = join(directory, ".codex-context");

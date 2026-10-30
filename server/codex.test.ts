@@ -83,6 +83,56 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 }
 
 describe("Studio Codex", () => {
+  test("creates isolated chats, restores history and source links, and resumes their own threads", async () => {
+    const { request, app, root, log } = await setup();
+    await request("/Alpha", { appRoot: app }, "PUT");
+    await (await request("/Alpha/turn", input)).text();
+    const first = await (await request("/Alpha")).json();
+    const second = await (await request("/Alpha/sessions", {})).json();
+    expect(second.activeSessionId).not.toBe(first.activeSessionId);
+    expect(second.appRoot).toBe(first.appRoot);
+    expect(second.messages).toEqual([]);
+    expect(second.threadId).toBeUndefined();
+    expect(second.sessions).toHaveLength(2);
+    expect(second.sessions[0].messages).toEqual(first.messages);
+    const stale = await request("/Alpha/turn", { ...input, sessionId: first.activeSessionId });
+    expect(stale.status).toBe(400);
+    await (await request("/Alpha/turn", { ...input, message: "Second chat", sessionId: second.activeSessionId })).text();
+    const savedSecond = await readCodexProject(join(root, "Alpha"));
+    expect(savedSecond.threadId).not.toBe(first.threadId);
+    await request("/Alpha", { appRoot: null }, "PUT");
+    const restored = await (await request("/Alpha/sessions", { sessionId: first.activeSessionId })).json();
+    expect(restored.messages).toEqual(first.messages);
+    expect(restored.appRoot).toBe(first.appRoot);
+    expect(restored.threadId).toBe(first.threadId);
+    await (await request("/Alpha/turn", { ...input, sessionId: first.activeSessionId })).text();
+    const packets = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(packets.filter((packet) => packet.method === "thread/start")).toHaveLength(2);
+    expect(packets.filter((packet) => packet.method === "thread/resume").at(-1).params.threadId).toBe(first.threadId);
+    const disk = await readCodexProject(join(root, "Alpha"));
+    expect(disk.messages).toHaveLength(4);
+    expect(disk.sessions?.[1]?.messages).toHaveLength(2);
+    expect(disk.sessions?.[1]?.appRoot).toBeNull();
+    expect((await request("/Alpha/sessions", { sessionId: "missing" })).status).toBe(400);
+    expect((await (await request("/Beta")).json()).sessions).toHaveLength(1);
+  });
+
+  test("migrates a legacy chat without losing its thread or messages", async () => {
+    const { request, root } = await setup();
+    const legacy = { appRoot: null, threadId: "existing-thread", messages: [{ id: "old", role: "user", text: "Original chat", sceneId: input.sceneId, locale: input.locale, device: input.device }] };
+    await writeFile(join(root, "Alpha", "goldie.codex.json"), JSON.stringify(legacy));
+    const original = await (await request("/Alpha")).json();
+    expect(original.messages).toEqual(legacy.messages);
+    expect(original.threadId).toBe(legacy.threadId);
+    await request("/Alpha/sessions", {});
+    const restored = await (await request("/Alpha/sessions", { sessionId: original.activeSessionId })).json();
+    expect(restored.messages).toEqual(legacy.messages);
+    expect(restored.threadId).toBe(legacy.threadId);
+    const disk = JSON.parse(await readFile(join(root, "Alpha", "goldie.codex.json"), "utf8"));
+    expect(disk.sessions).toHaveLength(2);
+    expect(disk.messages).toBeUndefined();
+  });
+
   test("reports missing runtimes without crashing or hanging", async () => {
     const agent = new StudioCodex(new CodexRpc("/nonexistent/goldie-codex"));
     cleanups.push(() => agent.close());
@@ -169,6 +219,9 @@ describe("Studio Codex", () => {
     const running = await request("/Alpha/turn", { ...input, message: "wait for stop" });
     const concurrent = await request("/Alpha/turn", input);
     expect(concurrent.status).toBe(400);
+    expect((await request("/Alpha/sessions", {})).status).toBe(400);
+    const active = await (await request("/Alpha")).json();
+    expect((await request("/Alpha/sessions", { sessionId: active.activeSessionId })).status).toBe(400);
     const change = await request("/Alpha", { appRoot: null }, "PUT");
     expect(change.status).toBe(400);
     await request("/Alpha/stop", {});
@@ -232,6 +285,8 @@ describe("Studio Codex", () => {
     expect(state.messages).toHaveLength(0);
     expect(state.threadId).toBeUndefined();
     expect(state.appRoot).toBe(await realpath(root));
+    expect(state.sessions).toHaveLength(2);
+    expect(state.sessions?.[0]?.messages).toHaveLength(4);
   });
 
   test("rejects remote hosts and cross-origin access before calling the runtime", () => {

@@ -12,9 +12,12 @@ export type ChatMessage = {
   status?: "completed" | "interrupted" | "failed";
   proposal?: CopyProposal | null;
 };
-export type CodexProject = { appRoot: string | null; lastAppRoot?: string; threadId?: string; messages: ChatMessage[] };
+export type CodexConversation = { appRoot: string | null; lastAppRoot?: string; threadId?: string; messages: ChatMessage[] };
+export type CodexSession = CodexConversation & { id: string; title: string; createdAt: string; updatedAt: string };
+export type CodexProject = CodexConversation & { activeSessionId?: string; sessions?: CodexSession[] };
 export type CodexStatus = { available: boolean; authenticated: boolean; account: string; error?: string };
 export type ChatInput = {
+  sessionId?: string;
   message: string;
   sceneId: string;
   locale: string;

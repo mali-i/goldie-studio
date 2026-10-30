@@ -50,13 +50,23 @@ undo step and follows the existing autosave/export flow. Use **Undo last edit**
 or the editor's Cmd/Ctrl+Z to undo. **Stop** interrupts an active reply;
 **Reconnect Codex** restarts a disconnected runtime.
 
-Each Studio project persists its own linked directory, Codex thread ID and
-conversation in `workspace/<project>/goldie.codex.json`. Reloading resumes the
-conversation. Linking source for the first time or unlinking it preserves the
+Each Studio project persists multiple chats and the active chat ID in
+`workspace/<project>/goldie.codex.json`. Use **New chat** to start a separate
+conversation. Click the speech-bubble icon in the panel header to switch to the conversation
+directory. Select a chat or use **Back to chat** to return. The directory replaces
+the chat view without taking up space above messages. History is grouped by
+Today, Yesterday, and Earlier. Search titles, messages, or linked app names to
+find a chat; the list shows message previews and marks the active chat.
+Each chat has its own linked
+directory, Codex thread ID and messages; its title comes from the first message.
+New chats inherit the current source link, with an empty history and a new Codex
+thread on first send. Reloading restores the active chat. Existing single-chat
+files migrate automatically on the next save. Excerpt source links also switch
+to the original chat. Stop an active reply before creating or switching chats.
+Linking source for the first time or unlinking it preserves the
 conversation. While unlinked, source reading is disabled; previously read code
-remains in conversation context. Linking a different app clears the Studio chat
-and detaches the previous thread (it does not delete Codex's own history),
-including when the previous app was unlinked first.
+remains in conversation context. Linking a different app starts a new chat and
+keeps the previous chat in history, including when the previous app was unlinked first.
 Closing the panel or leaving the project stops its active reply.
 
 This preview uses read-only Codex sessions, rejects approval escalations,
