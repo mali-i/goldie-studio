@@ -66,6 +66,9 @@ async function saveProject(directory: string, state: CodexProject) {
   Object.assign(session, { appRoot: state.appRoot, lastAppRoot: state.lastAppRoot,
     threadId: state.threadId, messages: state.messages, updatedAt: new Date().toISOString(),
     title: state.messages.find((message) => message.role === "user")?.text.slice(0, 60) || "New chat" });
+  // Keep only the current empty draft; abandoned drafts are not chat history.
+  // A thread ID also counts as history, even if its local messages are missing.
+  state.sessions = state.sessions!.filter((item) => item.id === state.activeSessionId || item.messages.length > 0 || item.threadId);
   const file = join(directory, "goldie.codex.json");
   const temporary = `${file}.${randomUUID()}.tmp`;
   // Store each history once; top-level fields are a compatibility projection for the API.
@@ -160,8 +163,10 @@ export class StudioCodex {
           if (!existing) throw new Error("Chat not found.");
           session = existing;
         } else {
-          session = newSession(state.appRoot);
-          state.sessions!.push(session);
+          const empty = state.sessions!.find((item) => !item.messages.length && !item.threadId
+            && item.appRoot === state.appRoot && (!item.lastAppRoot || item.lastAppRoot === state.appRoot));
+          session = empty ?? newSession(state.appRoot);
+          if (!empty) state.sessions!.push(session);
         }
         const next = selectSession(state, session);
         await saveProject(directory, next);

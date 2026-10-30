@@ -31,7 +31,9 @@ export function ChatSessions({ sessions, activeId, disabled, onSelect, onCreate,
 }) {
   const [query, setQuery] = useState("");
   const search = query.trim().toLocaleLowerCase();
-  const filtered = [...sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((session) =>
+  // The active draft is available in the composer, but is not saved chat history.
+  const history = sessions.filter((session) => session.messages.some((message) => message.role === "user" && message.text.trim()));
+  const filtered = [...history].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((session) =>
     !search || [session.title, session.appRoot ?? "", ...session.messages.map((message) => message.text)]
       .some((text) => text.toLocaleLowerCase().includes(search)));
 
@@ -41,7 +43,7 @@ export function ChatSessions({ sessions, activeId, disabled, onSelect, onCreate,
         <Button size="xs" variant="ghost" className="-ml-2 text-muted-foreground" onClick={onBack}><ArrowLeftIcon />Back to chat</Button>
       </div>
           <div className="flex items-center justify-between px-4 pb-3 pt-4">
-            <div className="flex items-center gap-2"><h3 className="text-sm font-semibold">Your conversations</h3><span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{sessions.length}</span></div>
+            <div className="flex items-center gap-2"><h3 className="text-sm font-semibold">Your conversations</h3><span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{history.length}</span></div>
             <Button size="xs" variant="ghost" disabled={disabled || !activeId} onClick={() => void onCreate()}><PlusIcon />New chat</Button>
           </div>
           <div className="relative mx-3 mb-3">
@@ -73,7 +75,7 @@ export function ChatSessions({ sessions, activeId, disabled, onSelect, onCreate,
                 })}
               </div>;
             })}
-            {!filtered.length && <div className="px-4 py-10 text-center"><SearchIcon className="mx-auto mb-3 size-5 text-muted-foreground" /><p className="text-xs font-medium">No conversations found</p><p className="mt-1 text-[11px] text-muted-foreground">Try another title, message, or app name.</p></div>}
+            {!filtered.length && <div className="px-4 py-10 text-center"><SearchIcon className="mx-auto mb-3 size-5 text-muted-foreground" /><p className="text-xs font-medium">{search ? "No conversations found" : "No conversations yet"}</p><p className="mt-1 text-[11px] text-muted-foreground">{search ? "Try another title, message, or app name." : "Send your first message to save a conversation here."}</p></div>}
           </nav>
           <div className="shrink-0 border-t border-border bg-muted/20 px-4 py-2.5 text-[10px] text-muted-foreground">Conversations are saved in this project.</div>
     </section>

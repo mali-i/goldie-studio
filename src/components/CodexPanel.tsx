@@ -128,7 +128,9 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
     try {
       const state = await codexJson<CodexProject>(`${base}/sessions`, sessionId ? { sessionId } : {});
       if (!mounted.current) return;
-      setProject(state); setPath(state.appRoot ?? ""); setDraft(""); setApplied(null); setSourceError(""); setDirectoryOpen(false);
+      setProject(state); setPath(state.appRoot ?? "");
+      if (state.activeSessionId !== project.activeSessionId) setDraft("");
+      setApplied(null); setSourceError(""); setDirectoryOpen(false);
     } catch (error) { viewedSource.current = source; reportError(error); }
     finally { if (mounted.current) setConnecting(false); }
   };

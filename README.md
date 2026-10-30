@@ -59,6 +59,11 @@ Today, Yesterday, and Earlier. Search titles, messages, or linked app names to
 find a chat; the list shows message previews and marks the active chat.
 Each chat has its own linked
 directory, Codex thread ID and messages; its title comes from the first message.
+Empty drafts are excluded from the conversation directory and its count until
+a user message has been accepted and saved. Repeated **New chat** clicks reuse
+the empty draft. Leaving an empty draft for
+another conversation removes it from history; chats with accepted messages stay
+saved, including failed or interrupted replies.
 New chats inherit the current source link, with an empty history and a new Codex
 thread on first send. Reloading restores the active chat. Existing single-chat
 files migrate automatically on the next save. Excerpt source links also switch

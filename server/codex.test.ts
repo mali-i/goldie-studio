@@ -129,8 +129,49 @@ describe("Studio Codex", () => {
     expect(restored.messages).toEqual(legacy.messages);
     expect(restored.threadId).toBe(legacy.threadId);
     const disk = JSON.parse(await readFile(join(root, "Alpha", "goldie.codex.json"), "utf8"));
-    expect(disk.sessions).toHaveLength(2);
+    expect(disk.sessions).toHaveLength(1);
     expect(disk.messages).toBeUndefined();
+  });
+
+  test("reuses empty chats until a message is accepted and drops abandoned drafts", async () => {
+    const { request, root } = await setup();
+    const initial = await (await request("/Alpha")).json();
+    for (let count = 0; count < 3; count++) {
+      const empty = await (await request("/Alpha/sessions", {})).json();
+      expect(empty.activeSessionId).toBe(initial.activeSessionId);
+      expect(empty.sessions).toHaveLength(1);
+    }
+    // Rejected sends must not turn an empty draft into saved history.
+    expect((await request("/Alpha/turn", { ...input, message: "" })).status).toBe(400);
+    const retry = await (await request("/Alpha/sessions", {})).json();
+    expect(retry.activeSessionId).toBe(initial.activeSessionId);
+    await (await request("/Alpha/turn", { ...input, sessionId: retry.activeSessionId })).text();
+    const next = await (await request("/Alpha/sessions", {})).json();
+    expect(next.activeSessionId).not.toBe(initial.activeSessionId);
+    expect(next.sessions).toHaveLength(2);
+    const repeated = await (await request("/Alpha/sessions", {})).json();
+    expect(repeated.activeSessionId).toBe(next.activeSessionId);
+    expect(repeated.sessions).toHaveLength(2);
+    await request("/Alpha/sessions", { sessionId: initial.activeSessionId });
+    const saved = JSON.parse(await readFile(join(root, "Alpha", "goldie.codex.json"), "utf8"));
+    expect(saved.sessions).toHaveLength(1);
+    expect(saved.sessions[0].messages).toHaveLength(2);
+  });
+
+  test("cleans up old duplicate empty chats while preserving populated chats", async () => {
+    const { request, root } = await setup();
+    await (await request("/Alpha/turn", input)).text();
+    const file = join(root, "Alpha", "goldie.codex.json");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    const template = { ...saved.sessions[0], threadId: undefined, messages: [], title: "New chat" };
+    saved.sessions.push({ ...template, id: "empty-1" }, { ...template, id: "empty-2" });
+    saved.activeSessionId = "empty-2";
+    await writeFile(file, JSON.stringify(saved));
+    const result = await (await request("/Alpha/sessions", {})).json();
+    expect(result.sessions).toHaveLength(2);
+    expect(result.sessions.filter((session: { messages: unknown[] }) => !session.messages.length)).toHaveLength(1);
+    expect(result.sessions[0].messages).toHaveLength(2);
+    expect(JSON.parse(await readFile(file, "utf8")).sessions).toHaveLength(2);
   });
 
   test("reports missing runtimes without crashing or hanging", async () => {
