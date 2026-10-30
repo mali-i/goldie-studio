@@ -165,7 +165,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
 
   return (
     <aside id="codex-panel" aria-label="Codex assistant" className="fixed inset-y-3 right-3 z-30 flex w-[380px] max-w-[calc(100vw-1.5rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground md:static md:z-auto md:ml-3 md:h-full md:min-w-[320px] md:max-w-[42vw]">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
+      {!directoryOpen && <header className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <Button size="icon" variant={directoryOpen ? "secondary" : "outline"} className="shrink-0" aria-label={directoryOpen ? "Return to chat" : "Browse chat history"} aria-pressed={directoryOpen} aria-controls="chat-directory" title={directoryOpen ? "Return to chat" : "Conversations"} onClick={() => { setDirectoryOpen((open) => !open); setSettings(false); }}><MessageSquareIcon className="size-4" /></Button>
           <div className="flex min-w-0 items-center gap-2">
@@ -217,10 +217,9 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           </Popover>
           <Button size="icon-sm" variant="ghost" aria-label="Close Codex panel" title="Collapse chat" onClick={onClose}><PanelRightCloseIcon /></Button>
         </div>
-      </header>
+      </header>}
       {directoryOpen && <>
-        {error && <p role="alert" className="shrink-0 px-4 pt-3 text-xs text-destructive">{error}</p>}
-        <ChatSessions sessions={project.sessions ?? []} activeId={project.activeSessionId}
+        <ChatSessions error={error} sessions={project.sessions ?? []} activeId={project.activeSessionId}
           disabled={busy || connecting} onSelect={changeSession} onCreate={() => changeSession()} onBack={() => setDirectoryOpen(false)} />
         {busy && <p role="status" className="shrink-0 border-t border-border px-4 py-3 text-xs text-muted-foreground">A reply is running. Return to chat to stop it before switching conversations.</p>}
       </>}
