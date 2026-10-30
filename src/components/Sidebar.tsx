@@ -2,6 +2,7 @@ import {
   type LucideIcon,
   LaptopIcon,
   MoonIcon,
+  MenuIcon,
   PlayIcon,
   PlusIcon,
   SmartphoneIcon,
@@ -9,7 +10,7 @@ import {
   TabletIcon,
 } from "lucide-react";
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -115,139 +116,168 @@ export function Sidebar({
   onScreenOnly: (v: boolean) => void;
   onSceneReorder: (order: string[]) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const contentId = useId();
   const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   return (
-    <aside className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <header className="flex h-14 shrink-0 items-center justify-between pr-3 pl-5">
-        <h1 className="text-base font-semibold tracking-tight select-none">
-          <span className="goldie-wordmark">goldie</span>
-        </h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onDark(!dark)}
-          aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-        >
-          {dark ? <SunIcon /> : <MoonIcon />}
-        </Button>
-      </header>
+    <aside className={cn(
+      "relative shrink-0 transition-[width] duration-200 ease-in-out motion-reduce:transition-none",
+      collapsed ? "w-0" : "w-[300px]",
+    )}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={cn(
+          "absolute top-3.5 z-20 border-0 bg-transparent text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground aria-expanded:bg-transparent dark:hover:bg-transparent",
+          collapsed ? "left-0" : "right-3",
+        )}
+        onClick={() => setCollapsed((value) => !value)}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!collapsed}
+        aria-controls={contentId}
+      >
+        <MenuIcon aria-hidden />
+      </Button>
+      <div
+        id={contentId}
+        inert={collapsed}
+        className={cn(
+          "flex h-full w-[300px] flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground transition-[opacity,visibility] duration-200 motion-reduce:transition-none",
+          collapsed ? "invisible opacity-0" : "visible opacity-100",
+        )}
+      >
+        <header className="flex h-14 shrink-0 items-center justify-between pr-12 pl-5">
+          <h1 className="text-base font-semibold tracking-tight select-none">
+            <span className="goldie-wordmark">goldie</span>
+          </h1>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDark(!dark)}
+            aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+          </Button>
+        </header>
 
-      <div className="flex items-center gap-2 border-y border-sidebar-border px-4 py-3">
-        <Select
-          value={projectId}
-          onChange={onProject}
-          options={[
-            ["demo", "Daylight Demo"],
-            ...projects.map((project): [string, string] => [project.id, project.name]),
-          ]}
-          size="sm"
-          className="min-w-0 flex-1"
-        />
-        <Button variant="outline" size="icon-sm" onClick={onNewProject} aria-label="New project">
-          <PlusIcon />
-        </Button>
-      </div>
-
-      <div className="sidebar-scroll flex-1 overflow-y-auto">
-        <div className="px-5 pt-5">
-          <Field label="Media Size">
-            <RadioGroupPrimitive.Root
-              value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
-              onValueChange={(key) => {
-                const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
-                if (picked) onPlatform(picked);
-              }}
-              aria-label="Device type"
-              className="grid grid-cols-4 gap-2"
-            >
-              {DEVICE_TYPES.map(({ key, icon: Icon, label }) => (
-                <RadioGroupPrimitive.Item
-                  key={key}
-                  value={key}
-                  className={cn(
-                    "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
-                    "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
-                    "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-                    "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
-                  )}
-                >
-                  <Icon className="size-4 shrink-0" aria-hidden />
-                  <span>{label}</span>
-                </RadioGroupPrimitive.Item>
-              ))}
-            </RadioGroupPrimitive.Root>
-          </Field>
+        <div className="flex items-center gap-2 border-y border-sidebar-border px-4 py-3">
+          <Select
+            value={projectId}
+            onChange={onProject}
+            options={[
+              ["demo", "Daylight Demo"],
+              ...projects.map((project): [string, string] => [project.id, project.name]),
+            ]}
+            size="sm"
+            className="min-w-0 flex-1"
+          />
+          <Button variant="outline" size="icon-sm" onClick={onNewProject} aria-label="New project">
+            <PlusIcon />
+          </Button>
         </div>
-        {platformDevices.length > 1 ? (
-          <div className="px-5 pt-4">
-            <Field label="Device">
-              <Select
-                value={device}
-                onChange={onDevice}
-                options={platformDevices.map((d) => [
-                  d.key,
-                  d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label,
-                ])}
-              />
+
+        <div className="sidebar-scroll flex-1 overflow-y-auto">
+          <div className="px-5 pt-5">
+            <Field label="Media Size">
+              <RadioGroupPrimitive.Root
+                value={DEVICE_TYPES.find((type) => type.platform === platform)?.key ?? ""}
+                onValueChange={(key) => {
+                  const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
+                  if (picked) onPlatform(picked);
+                }}
+                aria-label="Device type"
+                className="grid grid-cols-4 gap-2"
+              >
+                {DEVICE_TYPES.map(({ key, icon: Icon, label }) => (
+                  <RadioGroupPrimitive.Item
+                    key={key}
+                    value={key}
+                    className={cn(
+                      "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
+                      "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
+                      "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                      "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden />
+                    <span>{label}</span>
+                  </RadioGroupPrimitive.Item>
+                ))}
+              </RadioGroupPrimitive.Root>
             </Field>
           </div>
-        ) : null}
-        <LocaleSettings
-          projectId={projectId}
-          demo={demo}
-          locales={manifest.locales}
-          locale={locale}
-          onLocale={onLocale}
-          onChanged={onAssetsChanged}
-        />
-        <ProjectSettings projectId={projectId} demo={demo} locale={locale} onChanged={onAssetsChanged} />
-        <ProjectScreens
-          projectId={projectId}
-          demo={demo}
-          device={device}
-          locale={locale}
-          scenes={manifest.design.scenes}
-          captures={manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device]}
-          order={sceneOrder}
-          copy={sceneCopy}
-          template={sceneTemplate}
-          layout={layout}
-          sceneLayouts={sceneLayouts}
-          onReorder={onSceneReorder}
-          onChanged={onAssetsChanged}
-        />
-        <DesignPanel
-          design={manifest.design}
-          deviceFrame={
-            platform === "android" || Boolean(platformDevices.find((d) => d.key === device)?.frame)
-          }
-          background={background}
-          frame={frame}
-          fontFamily={fontFamily}
-          template={template}
-          layout={layout}
-          screenOnly={screenOnly}
-          onBackground={onBackground}
-          onFrame={onFrame}
-          onFontFamily={onFontFamily}
-          onTemplate={onTemplate}
-          onLayout={onLayout}
-          onScreenOnly={onScreenOnly}
-        />
-      </div>
+          {platformDevices.length > 1 ? (
+            <div className="px-5 pt-4">
+              <Field label="Device">
+                <Select
+                  value={device}
+                  onChange={onDevice}
+                  options={platformDevices.map((d) => [
+                    d.key,
+                    d.platform === "ios" || d.platform === "ipados" ? `${d.label}"` : d.label,
+                  ])}
+                />
+              </Field>
+            </div>
+          ) : null}
+          <LocaleSettings
+            projectId={projectId}
+            demo={demo}
+            locales={manifest.locales}
+            locale={locale}
+            onLocale={onLocale}
+            onChanged={onAssetsChanged}
+          />
+          <ProjectSettings projectId={projectId} demo={demo} locale={locale} onChanged={onAssetsChanged} />
+          <ProjectScreens
+            projectId={projectId}
+            demo={demo}
+            device={device}
+            locale={locale}
+            scenes={manifest.design.scenes}
+            captures={manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device]}
+            order={sceneOrder}
+            copy={sceneCopy}
+            template={sceneTemplate}
+            layout={layout}
+            sceneLayouts={sceneLayouts}
+            onReorder={onSceneReorder}
+            onChanged={onAssetsChanged}
+          />
+          <DesignPanel
+            design={manifest.design}
+            deviceFrame={
+              platform === "android" || Boolean(platformDevices.find((d) => d.key === device)?.frame)
+            }
+            background={background}
+            frame={frame}
+            fontFamily={fontFamily}
+            template={template}
+            layout={layout}
+            screenOnly={screenOnly}
+            onBackground={onBackground}
+            onFrame={onFrame}
+            onFontFamily={onFontFamily}
+            onTemplate={onTemplate}
+            onLayout={onLayout}
+            onScreenOnly={onScreenOnly}
+          />
+        </div>
 
-      <footer className="shrink-0 bg-sidebar p-4">
-        <ExportPanel
-          demo={demo}
-          device={device}
-          locale={locale}
-          hasScreens={Boolean(
-            (manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device])
-              ?.screenshots.length,
-          )}
-        />
-        <AboutDialog />
-      </footer>
+        <footer className="shrink-0 bg-sidebar p-4">
+          <ExportPanel
+            demo={demo}
+            device={device}
+            locale={locale}
+            hasScreens={Boolean(
+              (manifest.design.capturesByLocale?.[device]?.[locale] ?? manifest.design.captures[device])
+                ?.screenshots.length,
+            )}
+          />
+          <AboutDialog />
+        </footer>
+      </div>
     </aside>
   );
 }
