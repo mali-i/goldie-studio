@@ -22,7 +22,10 @@ to store projects somewhere else.
 ## Discuss screenshot copy with Codex (local preview)
 
 Open a workspace project and choose **Discuss with Codex** above the canvas.
-Optionally link the absolute path to your app's source directory. You can also
+In **App source**, use **Choose folder** to open the macOS native folder picker.
+Select a source folder, then choose **Link project** (or **Save project**) to
+confirm. Cancelling the picker keeps the existing selection and source link.
+Linking your app's source directory is optional. You can also
 chat using screenshots and descriptions alone. Studio starts its own
 `codex app-server` process and uses the local Codex authentication/provider
 configuration; no API key is stored in the browser. If needed, choose

@@ -68,10 +68,10 @@ async function responseJson(response: Response): Promise<any> {
   return result;
 }
 
-export async function codexJson<T>(url: string, body?: unknown, method = "POST"): Promise<T> {
+export async function codexJson<T>(url: string, body?: unknown, method = "POST", timeoutMs = 45_000): Promise<T> {
   const response = await fetchStudio(url, {
     ...(body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   return await responseJson(response) as T;
 }

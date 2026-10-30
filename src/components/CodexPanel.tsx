@@ -1,4 +1,4 @@
-import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquarePenIcon, SquareIcon, Undo2Icon, XIcon } from "lucide-react";
+import { ArrowUpIcon, CodeXmlIcon, FolderOpenIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquarePenIcon, SquareIcon, Undo2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "radix-ui";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
@@ -9,7 +9,6 @@ import type { ChatFrame } from "../lib/chatFrames";
 import { ChatSessions } from "./ChatSessions";
 import { FrameComposer } from "./FrameComposer";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 
 export function CodexPanel({ projectId, frames, context, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
   notes: NotesController;
@@ -28,6 +27,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const [status, setStatus] = useState<CodexStatus | null>(null);
   const [path, setPath] = useState("");
   const [settings, setSettings] = useState(false);
+  const [pickingDirectory, setPickingDirectory] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [selectedFrameIds, setSelectedFrameIds] = useState<string[] | null>(null);
@@ -123,6 +123,16 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
     finally { setConnecting(false); }
   };
 
+  const chooseDirectory = async () => {
+    if (pickingDirectory || busy || connecting) return;
+    setPickingDirectory(true); setError("");
+    try {
+      const result = await codexJson<{ appRoot: string | null }>(`${base}/pick-directory`, {}, "POST", 130_000);
+      if (mounted.current && result.appRoot !== null) setPath(result.appRoot);
+    } catch (error) { reportError(error); }
+    finally { if (mounted.current) setPickingDirectory(false); }
+  };
+
   const changeSession = async (sessionId?: string) => {
     if (busy || connecting) return;
     setConnecting(true); setError("");
@@ -188,7 +198,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
           <Button size="icon-sm" variant="ghost" aria-label="New chat" title="New chat" disabled={busy || connecting || !project.activeSessionId} onClick={() => { setSettings(false); void changeSession(); }}><SquarePenIcon /></Button>
-          <Dialog.Root open={settings} onOpenChange={(open) => { if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
+          <Dialog.Root open={settings} onOpenChange={(open) => { if (pickingDirectory) return; if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
             <Dialog.Trigger asChild>
               <Button size="icon-sm" variant="ghost" className="relative" aria-label={project.appRoot ? "Manage linked app source" : "Link app source (optional)"} title={project.appRoot ? `App source: ${project.appRoot}` : "Link app source (optional)"}>
                 <CodeXmlIcon />
@@ -197,25 +207,31 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
             </Dialog.Trigger>
             <Dialog.Portal container={panel.current}>
               <Dialog.Overlay className="absolute inset-0 z-50 bg-black/15 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-              <Dialog.Content className="absolute left-1/2 top-1/2 z-50 max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
-                <Dialog.Close asChild><Button size="icon-xs" variant="ghost" className="absolute right-4 top-4" aria-label="Close app source settings"><XIcon /></Button></Dialog.Close>
+              <Dialog.Content aria-describedby="app-directory-help" className="absolute left-1/2 top-1/2 z-50 max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+                <Dialog.Close asChild><Button size="icon-xs" variant="ghost" className="absolute right-4 top-4" disabled={pickingDirectory} aria-label="Close app source settings"><XIcon /></Button></Dialog.Close>
               <div className="space-y-1">
                 <Dialog.Title className="flex items-center gap-2 pr-7 text-sm font-semibold"><CodeXmlIcon className="size-4 text-muted-foreground" />App source<span className="ml-auto text-[10px] font-normal text-muted-foreground">{project.appRoot ? "Linked · Read-only" : "Optional"}</span></Dialog.Title>
                 {project.appRoot && <p className="truncate font-mono text-[11px] text-muted-foreground" title={project.appRoot}>{project.appRoot}</p>}
               </div>
-          <form id="app-project-settings" className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting) void link(path.trim()); }}>
+          <form id="app-project-settings" className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting && !pickingDirectory) void link(path.trim()); }}>
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium" htmlFor="app-directory">App source directory</label>
-              <Input id="app-directory" className="h-9 bg-background font-mono text-xs" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/Users/you/Projects/my-app" disabled={busy || connecting} aria-describedby="app-directory-help" autoComplete="off" spellCheck={false} />
+              <span className="block text-xs font-medium">App source directory</span>
+              <Button type="button" variant="outline" className="h-auto w-full justify-start gap-2 px-3 py-3 text-left" disabled={busy || connecting || pickingDirectory} onClick={() => void chooseDirectory()} aria-describedby="app-directory-help">
+                {pickingDirectory ? <Loader2Icon className="size-4 shrink-0 animate-spin" /> : <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs">{pickingDirectory ? "Choosing folder…" : path ? "Change folder" : "Choose folder"}</span>
+                  {path && <span className="mt-1 block truncate font-mono text-[10px] font-normal text-muted-foreground" title={path}>{path}</span>}
+                </span>
+              </Button>
               <Dialog.Description id="app-directory-help" className="text-[11px] leading-relaxed text-muted-foreground">Optional: link your app’s source folder for more accurate screenshot copy. Source access is read-only. Relevant code and screenshots are sent to your model provider.</Dialog.Description>
             </div>
             {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
             {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between gap-2">
-              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
+              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting || pickingDirectory} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
               <div className="flex items-center gap-1">
-                <Button type="button" size="sm" variant="ghost" disabled={connecting} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>
-                <Button size="sm" disabled={busy || connecting || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
+                <Button type="button" size="sm" variant="ghost" disabled={connecting || pickingDirectory} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>
+                <Button size="sm" disabled={busy || connecting || pickingDirectory || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
               </div>
             </div>
           </form>

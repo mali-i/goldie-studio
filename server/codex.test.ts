@@ -13,7 +13,7 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 const input: ChatInput = { message: "Explain the benefit", sceneId: "scene-1", device: "iphone-6.9", locale: "en-US", headline: "Unsaved headline", subhead: "Unsaved subhead" };
 
-async function setup() {
+async function setup(pickDirectory?: () => Promise<string | null>) {
   const root = await mkdtemp(join(tmpdir(), "goldie-codex-test-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const app = join(root, "app");
@@ -61,7 +61,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 });
 `);
   await chmod(executable, 0o755);
-  const agent = new StudioCodex(new CodexRpc(executable));
+  const agent = new StudioCodex(new CodexRpc(executable), pickDirectory);
   cleanups.push(() => agent.close());
   const alpha = await workspaceService.createProject(root, "Alpha");
   const beta = await workspaceService.createProject(root, "Beta");
@@ -172,6 +172,22 @@ describe("Studio Codex", () => {
     expect(result.sessions.filter((session: { messages: unknown[] }) => !session.messages.length)).toHaveLength(1);
     expect(result.sessions[0].messages).toHaveLength(2);
     expect(JSON.parse(await readFile(file, "utf8")).sessions).toHaveLength(2);
+  });
+
+  test("validates picked directories without changing the source link until saved", async () => {
+    let selection: string | null = null;
+    const { request, app } = await setup(async () => selection);
+    selection = app;
+    const picked = await (await request("/Alpha/pick-directory", {})).json();
+    expect(picked.appRoot).toBe(await realpath(app));
+    expect((await (await request("/Alpha")).json()).appRoot).toBeNull();
+    await request("/Alpha", picked, "PUT");
+    selection = null;
+    expect(await (await request("/Alpha/pick-directory", {})).json()).toEqual({ appRoot: null });
+    expect((await (await request("/Alpha")).json()).appRoot).toBe(await realpath(app));
+    selection = "/";
+    expect((await request("/Alpha/pick-directory", {})).status).toBe(400);
+    expect((await (await request("/Alpha")).json()).appRoot).toBe(await realpath(app));
   });
 
   test("reports missing runtimes without crashing or hanging", async () => {
