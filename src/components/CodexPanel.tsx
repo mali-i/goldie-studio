@@ -1,4 +1,4 @@
-import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquareIcon, Undo2Icon } from "lucide-react";
+import { ArrowUpIcon, CodeXmlIcon, Loader2Icon, MessageSquareIcon, PanelRightCloseIcon, RefreshCwIcon, SquarePenIcon, SquareIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
 import { HighlightText } from "./HighlightText";
@@ -186,6 +186,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           </div>
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
+          <Button size="icon-sm" variant="ghost" aria-label="New chat" title="New chat" disabled={busy || connecting || !project.activeSessionId} onClick={() => { setSettings(false); void changeSession(); }}><SquarePenIcon /></Button>
           <Popover open={settings} onOpenChange={(open) => { if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
             <PopoverTrigger asChild>
               <Button size="icon-sm" variant="ghost" className="relative" aria-label={project.appRoot ? "Manage linked app source" : "Link app source (optional)"} title={project.appRoot ? `App source: ${project.appRoot}` : "Link app source (optional)"}>

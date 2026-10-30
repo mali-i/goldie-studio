@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, SquarePenIcon, SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { CodexSession } from "../codex";
 import { Button } from "./ui/button";
@@ -51,7 +51,7 @@ export function ChatSessions({ sessions, activeId, disabled, onSelect, onCreate,
         <Button size="icon-xs" variant="ghost" aria-label="Back to chat" title="Back to chat" className="text-muted-foreground" onClick={onBack}><ArrowLeftIcon /></Button>
         <h3 className="flex-1 text-sm font-medium">Conversations <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">{history.length}</span></h3>
         <Button ref={searchToggle} size="icon-xs" variant={searchOpen ? "secondary" : "ghost"} aria-label={searchOpen ? "Close search" : "Search chats"} title={searchOpen ? "Close search" : "Search chats"} aria-expanded={searchOpen} aria-controls="chat-search" onClick={() => { if (searchOpen) closeSearch(); else setSearchOpen(true); }}><SearchIcon /></Button>
-        <Button size="xs" variant="ghost" disabled={disabled || !activeId} onClick={() => void onCreate()}><PlusIcon />New chat</Button>
+        <Button size="xs" variant="ghost" disabled={disabled || !activeId} onClick={() => void onCreate()}><SquarePenIcon />New chat</Button>
       </header>
       {error && <p role="alert" className="shrink-0 px-4 pt-3 text-xs text-destructive">{error}</p>}
           {searchOpen && <div id="chat-search" className="relative mx-3 my-3">
