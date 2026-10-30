@@ -1,5 +1,6 @@
 import {
   CameraIcon,
+  NotebookPenIcon,
   PanelRightOpenIcon,
   LaptopIcon,
   type LucideIcon,
@@ -466,11 +467,29 @@ function Loaded({
           enabled={Boolean(spec && captures && design.scenes.length > 0)}
           label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
           toolbarActions={!manifest.demo ? <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-8 rounded-full" title={notes.error || notes.status} aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}>Value notes{notes.error ? " ⚠" : ""}{notes.notes.excerpts.length ? ` · ${notes.notes.excerpts.length}` : ""}</Button>
-            {!chatOpen && <Button ref={chatTrigger} size="sm" variant="outline"
-              className="h-8 gap-2 rounded-full border-sidebar-border bg-sidebar px-3.5 shadow-sm hover:bg-muted"
-              aria-expanded={false} aria-controls="codex-panel" onClick={() => setChatOpen(true)}>
-              <PanelRightOpenIcon className="size-3.5 text-muted-foreground" />Discuss with Codex
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9 gap-2 rounded-xl px-3 text-xs text-muted-foreground hover:bg-sidebar hover:text-foreground aria-expanded:bg-sidebar aria-expanded:text-foreground"
+              title={notes.error || notes.status}
+              aria-expanded={notesOpen}
+              onClick={() => setNotesOpen(!notesOpen)}
+            >
+              <span>Value notes</span>
+              {notes.error
+                ? <TriangleAlertIcon className="size-3.5 text-destructive" aria-label="Could not save notes" />
+                : <NotebookPenIcon className="size-3.5" aria-hidden />}
+            </Button>
+            {!chatOpen && <Button
+              ref={chatTrigger}
+              size="sm"
+              className="h-9 gap-2.5 rounded-xl px-3.5 text-xs shadow-sm"
+              aria-expanded={false}
+              aria-controls="codex-panel"
+              onClick={() => setChatOpen(true)}
+            >
+              <span>Discuss with Codex</span>
+              <PanelRightOpenIcon className="size-3.5 opacity-80" aria-hidden />
             </Button>}
           </div> : undefined}
         >
