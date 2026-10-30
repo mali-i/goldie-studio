@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { codexJson } from "../codex";
-import { emptyNotes, type WorkspaceNotes } from "../notes";
+import { emptyNotes, migrateNotes, type WorkspaceNotes } from "../notes";
 
 export function useWorkspaceNotes(projectId: string, enabled: boolean) {
   const key = `goldie:notes-draft:${projectId}`;
@@ -23,12 +23,12 @@ export function useWorkspaceNotes(projectId: string, enabled: boolean) {
       const saved = await codexJson<WorkspaceNotes>(url);
       if (!mounted.current) return;
       let draft: WorkspaceNotes | null = null;
-      try { draft = JSON.parse(localStorage.getItem(key) || "null"); } catch { /* Ignore broken browser cache. */ }
-      const valid = draft && typeof draft.document === "string" && Array.isArray(draft.excerpts) && Number.isSafeInteger(draft.revision);
-      const alreadySaved = valid && draft!.document === saved.document && JSON.stringify(draft!.excerpts) === JSON.stringify(saved.excerpts);
+      try { draft = migrateNotes(JSON.parse(localStorage.getItem(key) || "null")); } catch { /* Ignore broken browser cache. */ }
+      const valid = draft && Array.isArray(draft.cards) && Array.isArray(draft.excerpts) && Number.isSafeInteger(draft.revision);
+      const alreadySaved = valid && JSON.stringify(draft!.cards.map(({ history: _history, ...card }) => card)) === JSON.stringify(saved.cards.map(({ history: _history, ...card }) => card)) && JSON.stringify(draft!.excerpts) === JSON.stringify(saved.excerpts);
       if (alreadySaved) { try { localStorage.removeItem(key); } catch { /* Optional draft cache. */ } }
       const recovered = valid && !alreadySaved;
-      const next = recovered ? { ...draft!, history: saved.history } : saved;
+      const next = recovered ? { ...draft!, cards: draft!.cards.map((card) => ({ ...card, history: saved.cards.find((item) => item.id === card.id)?.history ?? [] })) } : saved;
       current.current = next; setNotes(next); setReady(true); setDirty(Boolean(recovered));
       setError(recovered && draft!.revision !== saved.revision ? "A recovered draft conflicts with notes in another window. Copy your draft before reloading." : "");
     } catch (error) { if (mounted.current) setError(String(error instanceof Error ? error.message : error)); }
@@ -61,7 +61,7 @@ export function useWorkspaceNotes(projectId: string, enabled: boolean) {
     const sentVersion = version.current;
     try {
       const saved = await codexJson<WorkspaceNotes>(url, current.current, "PUT");
-      const next = { ...current.current, revision: saved.revision, history: saved.history };
+      const next = { ...current.current, revision: saved.revision, cards: current.current.cards.map((card) => ({ ...card, history: saved.cards.find((item) => item.id === card.id)?.history ?? [] })) };
       current.current = next;
       if (version.current === sentVersion) {
         try { localStorage.removeItem(key); } catch { /* Optional draft cache. */ }

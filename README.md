@@ -111,9 +111,11 @@ See [LICENSE](LICENSE) for the license and attribution details.
 ### Workspace value notes
 
 Open **Value notes** above the canvas to collect your thinking across the whole
-workspace. **Current understanding** is a freeform plain-text document; write,
-paste and revise it yourself. It saves automatically, with up to 20 previous
-versions available to restore.
+workspace. **Notes** is a collection of cards: create a note for each idea, open
+a card to edit its title and plain-text document, or delete a card when it is no
+longer needed. Every card saves automatically and keeps up to 20 previous text
+versions available to restore. Existing single-document notes and their history
+are preserved in a **Current understanding** card.
 
 Select text in a Codex reply and choose **Highlight**. The highlighted passage
 appears in **Excerpts**, where you can copy it, return to its source, or remove

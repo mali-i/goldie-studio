@@ -6,13 +6,31 @@ export type Excerpt = {
   text: string;
   createdAt: string;
 };
-export type WorkspaceNotes = {
-  revision: number;
+export type NoteCard = {
+  id: string;
+  title: string;
   document: string;
-  excerpts: Excerpt[];
   history: { document: string; savedAt: string }[];
 };
-export const emptyNotes = (): WorkspaceNotes => ({ revision: 0, document: "", excerpts: [], history: [] });
+export type WorkspaceNotes = {
+  revision: number;
+  cards: NoteCard[];
+  excerpts: Excerpt[];
+};
+export const emptyNotes = (): WorkspaceNotes => ({ revision: 0, cards: [], excerpts: [] });
+
+/** Stable ID keeps saved legacy notes and browser recovery drafts aligned. */
+export function migrateNotes(value: unknown): WorkspaceNotes {
+  const notes = value as WorkspaceNotes & { document?: string; history?: NoteCard["history"] };
+  if (notes && !Array.isArray(notes.cards) && typeof notes.document === "string") {
+    return {
+      revision: notes.revision,
+      cards: notes.document || notes.history?.length ? [{ id: "legacy-document", title: "Current understanding", document: notes.document, history: notes.history ?? [] }] : [],
+      excerpts: notes.excerpts,
+    };
+  }
+  return notes;
+}
 
 /** Offsets use the original message's UTF-16 text, independent of rendered marks. */
 export function highlightSegments(text: string, excerpts: Excerpt[]) {
