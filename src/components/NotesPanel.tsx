@@ -1,10 +1,53 @@
-import { useState } from "react";
-import { ChevronDownIcon, CopyIcon, FileTextIcon, HighlighterIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { ChevronDownIcon, CopyIcon, FileTextIcon, GripHorizontalIcon, HighlighterIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import type { Excerpt, NoteCard } from "../notes";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import { Button } from "./ui/button";
 
-export function NotesPanel({ controller: c, onClose, onSource }: { controller: NotesController; onClose: () => void; onSource: (excerpt: Excerpt) => void }) {
+type Position = { x: number; y: number };
+
+const MOVE_KEYS: Partial<Record<string, Position>> = {
+  ArrowLeft: { x: -16, y: 0 },
+  ArrowRight: { x: 16, y: 0 },
+  ArrowUp: { x: 0, y: -16 },
+  ArrowDown: { x: 0, y: 16 },
+};
+
+function clampPosition(position: Position, bounds: Position): Position {
+  return {
+    x: Math.max(0, Math.min(position.x, bounds.x)),
+    y: Math.max(0, Math.min(position.y, bounds.y)),
+  };
+}
+
+export function NotesPanel({ controller: c, position, onMove, onClose, onSource }: {
+  controller: NotesController;
+  position: Position | null;
+  onMove: (position: Position) => void;
+  onClose: () => void;
+  onSource: (excerpt: Excerpt) => void;
+}) {
+  const panel = useRef<HTMLElement>(null);
+  const drag = useRef<{ pointerId: number; offset: Position } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [bounds, setBounds] = useState<Position>({ x: 0, y: 0 });
+  const location = clampPosition(position ?? { x: bounds.x, y: 0 }, bounds);
+
+  useLayoutEffect(() => {
+    const element = panel.current;
+    const container = element?.parentElement;
+    if (!element || !container) return;
+    const measure = () => setBounds({
+      x: container.clientWidth - element.offsetWidth,
+      y: container.clientHeight - element.offsetHeight,
+    });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const [tab, setTab] = useState<"document" | "excerpts">("document");
   const [feedback, setFeedback] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -16,13 +59,55 @@ export function NotesPanel({ controller: c, onClose, onSource }: { controller: N
     setSelectedId(id);
     setDeletingId(null);
   };
-  return <aside aria-label="Workspace value notes" className="fixed inset-y-3 right-3 z-30 flex w-[360px] max-w-[calc(100vw-24px)] shrink-0 md:static md:ml-3 md:h-full md:max-w-[42vw] flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar">
-    <header className="flex shrink-0 items-center justify-between gap-1 border-b border-border p-2">
-      <div className="flex min-w-0 gap-1" role="tablist" aria-label="Value notes">
+  return <aside ref={panel} id="value-notes" aria-label="Workspace value notes"
+    className="pointer-events-auto absolute flex h-[520px] max-h-full w-[360px] max-w-full flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar shadow-xl"
+    style={{ left: location.x, top: location.y }}
+  >
+    <header className="shrink-0 border-b border-border p-2">
+      <div className="mb-1 flex items-center gap-1">
+        <button
+          type="button"
+          title="Drag to move Value notes, or focus and use the arrow keys"
+          aria-label="Move Value notes with the arrow keys"
+          className={`flex min-w-0 flex-1 touch-none select-none items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || drag.current || !panel.current) return;
+            const rect = panel.current.getBoundingClientRect();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            drag.current = { pointerId: event.pointerId, offset: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
+            setDragging(true);
+          }}
+          onPointerMove={(event) => {
+            const current = drag.current;
+            const container = panel.current?.parentElement;
+            if (!current || current.pointerId !== event.pointerId || !container) return;
+            const rect = container.getBoundingClientRect();
+            onMove(clampPosition({
+              x: event.clientX - rect.left - current.offset.x,
+              y: event.clientY - rect.top - current.offset.y,
+            }, bounds));
+          }}
+          onLostPointerCapture={(event) => {
+            if (drag.current?.pointerId !== event.pointerId) return;
+            drag.current = null;
+            setDragging(false);
+          }}
+          onKeyDown={(event) => {
+            const delta = MOVE_KEYS[event.key];
+            if (!delta) return;
+            event.preventDefault();
+            onMove(clampPosition({ x: location.x + delta.x, y: location.y + delta.y }, bounds));
+          }}
+        >
+          <GripHorizontalIcon aria-hidden="true" className="size-4 shrink-0" />
+          <span className="truncate">Value notes</span>
+        </button>
+        <Button size="icon-sm" variant="ghost" aria-label="Close value notes" onClick={onClose}><XIcon /></Button>
+      </div>
+      <div className="flex min-w-0 gap-1 overflow-x-auto" role="tablist" aria-label="Value notes">
         <Button role="tab" aria-selected={tab === "document"} variant={tab === "document" ? "secondary" : "ghost"} size="sm" onClick={() => setTab("document")}>Notes · {c.notes.cards.length}</Button>
         <Button role="tab" aria-selected={tab === "excerpts"} variant={tab === "excerpts" ? "secondary" : "ghost"} size="sm" onClick={() => setTab("excerpts")}><HighlighterIcon />Excerpts · {c.notes.excerpts.length}</Button>
       </div>
-      <Button size="icon-sm" variant="ghost" aria-label="Close value notes" onClick={onClose}><XIcon /></Button>
     </header>
     {c.error && <div role="alert" className="border-b border-border p-3 text-xs text-destructive">{c.error}<Button variant="outline" size="xs" className="mt-2 block" onClick={c.retry}>Retry</Button>{c.ready && <><p className="mt-2">Copy any text you want to keep before discarding your draft.</p><Button variant="outline" size="xs" className="mt-2" onClick={() => void c.discardDraft()}>Discard draft & load saved</Button></>}</div>}
     {tab === "document" ? <div className="flex min-h-0 flex-1 flex-col" role="tabpanel">

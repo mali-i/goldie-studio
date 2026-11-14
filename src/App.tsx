@@ -239,6 +239,7 @@ function Loaded({
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
   const notes = useWorkspaceNotes(projectId, !manifest.demo);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [notesPosition, setNotesPosition] = useState<{ x: number; y: number } | null>(null);
   const [noteSource, setNoteSource] = useState<Excerpt | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const chatTrigger = useRef<HTMLButtonElement>(null);
@@ -422,7 +423,7 @@ function Loaded({
   const chatSubhead = selectedScene ? (copy[selectedScene.id]?.subhead?.[locale] ?? selectedScene.subhead?.[locale] ?? "") : "";
 
   return (
-    <div className={`flex h-full bg-stage p-3 text-foreground ${chatOpen || notesOpen ? "[&>aside:first-child]:hidden xl:[&>aside:first-child]:flex" : ""}`}>
+    <div className={`flex h-full bg-stage p-3 text-foreground ${chatOpen ? "[&>aside:first-child]:hidden xl:[&>aside:first-child]:flex" : ""}`}>
       <Sidebar
         projectId={projectId}
         projects={projects}
@@ -466,6 +467,13 @@ function Loaded({
         <PreviewCanvas
           enabled={Boolean(spec && captures && design.scenes.length > 0)}
           label={spec ? `Media Size: ${spec.screenshot.width} × ${spec.screenshot.height}` : undefined}
+          overlay={notesOpen && !manifest.demo && <NotesPanel
+            controller={notes}
+            position={notesPosition}
+            onMove={setNotesPosition}
+            onClose={() => setNotesOpen(false)}
+            onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }}
+          />}
           toolbarActions={!manifest.demo ? <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -473,6 +481,7 @@ function Loaded({
               className="h-9 gap-2 rounded-xl px-3 text-xs text-muted-foreground hover:bg-sidebar hover:text-foreground aria-expanded:bg-sidebar aria-expanded:text-foreground"
               title={notes.error || notes.status}
               aria-expanded={notesOpen}
+              aria-controls={notesOpen ? "value-notes" : undefined}
               onClick={() => setNotesOpen(!notesOpen)}
             >
               <span>Value notes</span>
@@ -539,7 +548,6 @@ function Loaded({
         </PreviewCanvas>
       </div>
 
-      {notesOpen && !manifest.demo && <NotesPanel controller={notes} onClose={() => setNotesOpen(false)} onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }} />}
       {chatOpen && !manifest.demo && <CodexPanel
         notes={notes}
         source={noteSource}

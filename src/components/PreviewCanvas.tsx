@@ -9,11 +9,13 @@ export function PreviewCanvas({
   label,
   enabled,
   toolbarActions,
+  overlay,
 }: {
   children: ReactNode;
   label?: string;
   enabled: boolean;
   toolbarActions?: ReactNode;
+  overlay?: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -34,7 +36,7 @@ export function PreviewCanvas({
     const element = viewport.current;
     if (!element || !enabled) return;
     const onWheel = (event: WheelEvent) => {
-      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"], [data-canvas-overlay]')) return;
       event.preventDefault();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
       if (event.ctrlKey || event.metaKey) {
@@ -92,6 +94,7 @@ export function PreviewCanvas({
           backgroundPosition: `${camera.x}px ${camera.y}px`,
         }}
         onPointerDown={(event) => {
+          if (event.target instanceof Element && event.target.closest("[data-canvas-overlay]")) return;
           if (!enabled || event.pointerType !== "mouse" ||
             (event.button !== 1 && (event.button !== 0 || event.target !== event.currentTarget))) return;
           event.preventDefault();
@@ -128,6 +131,7 @@ export function PreviewCanvas({
             {children}
           </div>
         {enabled && <p className="pointer-events-none absolute bottom-4 left-0 right-0 text-center text-[11px] text-muted-foreground">Two-finger pan · Pinch to zoom · Drag empty canvas to move</p>}
+        {overlay && <div data-canvas-overlay className="pointer-events-none absolute inset-2 z-20 cursor-auto">{overlay}</div>}
       </div>
     </main>
   );
