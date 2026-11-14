@@ -7,6 +7,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { Reorder } from "motion/react";
+import { AlertDialog } from "radix-ui";
 import { useRef, useState } from "react";
 import { isTemplateKey, resolveScenes, type LayoutKey } from "../lib/layouts";
 import type { DesignScene, DeviceCaptures, SceneCopy } from "../manifest";
@@ -47,6 +48,8 @@ export function ProjectScreens({
   const uploadTarget = useRef<{ sceneId: string; slot: ScreenshotSlot } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sceneToDelete, setSceneToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   if (demo) return null;
 
   const rank = new Map(order.map((id, index) => [id, index]));
@@ -143,6 +146,20 @@ export function ProjectScreens({
     }
   };
 
+  const deleteScene = async (sceneId: string) => {
+    setBusy(true);
+    setDeleteError(null);
+    try {
+      await projectApi.deleteScene(projectId, sceneId);
+      setSceneToDelete(null);
+      onChanged();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="flex flex-col gap-2 border-b border-sidebar-border px-5 py-4">
       <div className="flex items-center justify-between">
@@ -167,6 +184,58 @@ export function ProjectScreens({
               <span className="min-w-0 flex-1 truncate text-xs">
                 {index + 1}. {headlineOf(scene)}
               </span>
+              <AlertDialog.Root
+                open={sceneToDelete === scene.id}
+                onOpenChange={(open) => {
+                  if (busy) return;
+                  setSceneToDelete(open ? scene.id : null);
+                  setDeleteError(null);
+                }}
+              >
+                <AlertDialog.Trigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    disabled={busy}
+                    aria-label={`Delete scene ${index + 1}: ${headlineOf(scene)}`}
+                    title="Delete Scene"
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </AlertDialog.Trigger>
+                <AlertDialog.Portal>
+                  <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
+                  <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none">
+                    <AlertDialog.Title className="text-lg font-semibold">Delete Scene?</AlertDialog.Title>
+                    <AlertDialog.Description className="break-words text-sm text-muted-foreground">
+                      Scene {index + 1} “{headlineOf(scene)}” and its screenshots for all devices and languages will be removed. This cannot be undone.
+                    </AlertDialog.Description>
+                    {deleteError ? <p role="alert" className="text-sm text-destructive">{deleteError}</p> : null}
+                    <div className="flex justify-end gap-2">
+                      <AlertDialog.Cancel asChild>
+                        <Button type="button" variant="outline" disabled={busy}>Cancel</Button>
+                      </AlertDialog.Cancel>
+                      <AlertDialog.Action asChild>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            void deleteScene(scene.id);
+                          }}
+                        >
+                          {busy ? <Loader2Icon className="animate-spin" /> : null}
+                          {busy ? "Deleting…" : "Delete Scene"}
+                        </Button>
+                      </AlertDialog.Action>
+                    </div>
+                  </AlertDialog.Content>
+                </AlertDialog.Portal>
+              </AlertDialog.Root>
             </div>
             <div
               className={`mt-2 grid gap-1.5 ${needsSecondScreen.get(scene.id) ? "grid-cols-2" : "grid-cols-1"}`}

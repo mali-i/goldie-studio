@@ -231,6 +231,42 @@ describe("workspace projects", () => {
     expect(afterDelete.config.scenes[0]?.sources).toEqual({});
   });
 
+  test("deletes a scene across devices and locales and preserves screenshots used by other scenes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
+    roots.push(root);
+    const { project: { id } } = await workspaceService.createProject(root, "Delete Scene");
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    for (const [device, locale, slot] of [
+      ["iphone-6.9", "en-US", "primary"],
+      ["ipad-12.9", "zh-Hans", "secondary"],
+    ] as const) {
+      await workspaceService.saveScreenshot(root, id, {
+        sceneId: "scene-2", device, locale, slot, mimeType: "image/png", base64: png,
+      });
+    }
+
+    const { config } = await workspaceService.readProject(root, id);
+    const shared = config.scenes[1]!.sources["iphone-6.9"]!["en-US"]!.primary!;
+    const removed = config.scenes[1]!.sources["ipad-12.9"]!["zh-Hans"]!.secondary!;
+    config.scenes[2]!.sources = { "iphone-6.9": { "en-US": { primary: shared } } };
+    config.scenes[2]!.secondScene = "scene-2";
+    const configPath = join(root, id, "goldie.config.ts");
+    const source = await readFile(configPath, "utf8");
+    await writeFile(configPath, source.replace(
+      /(?<=\/\* goldie-config:start \*\/)[\s\S]*(?=\/\* goldie-config:end \*\/)/,
+      `\n${JSON.stringify(config)}\n`,
+    ));
+
+    const deleted = await workspaceService.deleteScene(root, id, "scene-2");
+    expect(deleted.config.scenes.map((scene) => scene.id)).toEqual(["scene-1", "scene-3"]);
+    expect(deleted.config.scenes[1]?.secondScene).toBeUndefined();
+    expect(await readFile(join(root, id, shared), "base64")).toBe(png);
+    await expect(readFile(join(root, id, removed))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(workspaceService.deleteScene(root, id, "scene-2")).rejects.toThrow("does not exist");
+    await workspaceService.deleteScene(root, id, "scene-1");
+    expect((await workspaceService.deleteScene(root, id, "scene-3")).config.scenes).toEqual([]);
+  });
+
   test("publishes the Mac canvas specification through the shared manifest flow", async () => {
     const root = await mkdtemp(join(tmpdir(), "goldie-studio-test-"));
     roots.push(root);

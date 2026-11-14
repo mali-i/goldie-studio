@@ -44,6 +44,10 @@ export const projectApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     }),
+  deleteScene: (id: string, sceneId: string) =>
+    json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/scenes/${encodeURIComponent(sceneId)}`, {
+      method: "DELETE",
+    }),
   saveConfig: (id: string, config: GoldieProjectConfig) =>
     json<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}/config`, {
       method: "PUT",

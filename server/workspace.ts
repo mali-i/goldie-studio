@@ -130,6 +130,9 @@ function createHandler(root: string, codex: StudioCodex) {
           const body = await readJson<{ headline?: string }>(req);
           return sendJson(res, await addScene(root, id, body.headline), 201);
         }
+        if (parts.length === 5 && req.method === "DELETE") {
+          return sendJson(res, await deleteScene(root, id, decodeURIComponent(parts[4]!)));
+        }
         return methodNotAllowed(res);
       }
       if (action === "screenshots") {
@@ -488,6 +491,35 @@ async function addScene(
     headline: { [locale]: requestedHeadline?.trim() || `Scene ${number}` },
   });
   await writeConfig(root, id, config);
+  return touchProject(root, id, config.store.name);
+}
+
+async function deleteScene(root: string, id: string, sceneId: string): Promise<ProjectDetail> {
+  const config = await readConfig(root, id);
+  const index = config.scenes.findIndex((scene) => scene.id === sceneId);
+  if (index < 0) throw new HttpError(404, `Scene ${sceneId} does not exist.`);
+
+  const [scene] = config.scenes.splice(index, 1);
+  for (const remaining of config.scenes) {
+    if (remaining.secondScene === sceneId) delete remaining.secondScene;
+  }
+
+  const screenshotFiles = (item: ProjectScene) =>
+    Object.values(item.sources ?? {}).flatMap((locales) =>
+      Object.values(locales).flatMap((slots) =>
+        Object.values(slots).map((path) => safeProjectPath(root, id, path)),
+      ),
+    );
+  const stillUsed = new Set(config.scenes.flatMap(screenshotFiles));
+  const unused = [...new Set(screenshotFiles(scene!))].filter((file) => !stillUsed.has(file));
+
+  await writeConfig(root, id, config);
+  for (const file of unused) {
+    await rm(file, { force: true }).catch((error) => {
+      // The scene is already gone; a cleanup failure must not look like a failed deletion.
+      console.warn("Could not clean up a deleted scene's screenshot:", error);
+    });
+  }
   return touchProject(root, id, config.store.name);
 }
 
@@ -1050,6 +1082,7 @@ export const workspaceService = {
   addLocale,
   renameLocale,
   addScene,
+  deleteScene,
   saveScreenshot,
   deleteScreenshot,
   applyDesign,
