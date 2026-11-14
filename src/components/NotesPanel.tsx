@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronDownIcon, CopyIcon, FileTextIcon, GripHorizontalIcon, GripIcon, HighlighterIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ChevronDownIcon, CopyIcon, FileTextIcon, GripHorizontalIcon, GripIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import type { Excerpt, NoteCard } from "../notes";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import { Button } from "./ui/button";
@@ -76,6 +76,7 @@ export function NotesPanel({ controller: c, position, size, onMove, onResize, on
   const createCard = () => {
     const id = crypto.randomUUID();
     c.update((n) => ({ ...n, cards: [...n.cards, { id, title: "", document: "", history: [] }] }));
+    setTab("document");
     setSelectedId(id);
     setDeletingId(null);
   };
@@ -83,58 +84,54 @@ export function NotesPanel({ controller: c, position, size, onMove, onResize, on
     className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar shadow-xl"
     style={{ left: location.x, top: location.y, width, height }}
   >
-    <header className="shrink-0 border-b border-border p-2">
-      <div className="mb-1 flex items-center gap-1">
-        <button
-          type="button"
-          title="Drag to move Value notes, or focus and use the arrow keys"
-          aria-label="Move Value notes with the arrow keys"
-          className={`flex min-w-0 flex-1 touch-none select-none items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
-          onPointerDown={(event) => {
-            if (event.button !== 0 || drag.current || resize.current || !panel.current) return;
-            const rect = panel.current.getBoundingClientRect();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag.current = { pointerId: event.pointerId, offset: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
-            setDragging(true);
-          }}
-          onPointerMove={(event) => {
-            const current = drag.current;
-            const container = panel.current?.parentElement;
-            if (!current || current.pointerId !== event.pointerId || !container) return;
-            const rect = container.getBoundingClientRect();
-            onMove(clampPosition({
-              x: event.clientX - rect.left - current.offset.x,
-              y: event.clientY - rect.top - current.offset.y,
-            }, bounds));
-          }}
-          onLostPointerCapture={(event) => {
-            if (drag.current?.pointerId !== event.pointerId) return;
-            drag.current = null;
-            setDragging(false);
-          }}
-          onKeyDown={(event) => {
-            const delta = MOVE_KEYS[event.key];
-            if (!delta) return;
-            event.preventDefault();
-            onMove(clampPosition({ x: location.x + delta.x, y: location.y + delta.y }, bounds));
-          }}
-        >
-          <GripHorizontalIcon aria-hidden="true" className="size-4 shrink-0" />
-          <span className="truncate">Value notes</span>
-        </button>
-        <Button size="icon-sm" variant="ghost" aria-label="Close value notes" onClick={onClose}><XIcon /></Button>
-      </div>
+    <header className="flex shrink-0 items-center gap-1 border-b border-border p-2">
+      <button
+        type="button"
+        title="Drag to move Value notes, or focus and use the arrow keys"
+        aria-label="Move Value notes with the arrow keys"
+        className={`flex min-w-6 flex-1 touch-none select-none items-center gap-1 rounded-md px-1 py-1 text-left text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+        onPointerDown={(event) => {
+          if (event.button !== 0 || drag.current || resize.current || !panel.current) return;
+          const rect = panel.current.getBoundingClientRect();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          drag.current = { pointerId: event.pointerId, offset: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
+          setDragging(true);
+        }}
+        onPointerMove={(event) => {
+          const current = drag.current;
+          const container = panel.current?.parentElement;
+          if (!current || current.pointerId !== event.pointerId || !container) return;
+          const rect = container.getBoundingClientRect();
+          onMove(clampPosition({
+            x: event.clientX - rect.left - current.offset.x,
+            y: event.clientY - rect.top - current.offset.y,
+          }, bounds));
+        }}
+        onLostPointerCapture={(event) => {
+          if (drag.current?.pointerId !== event.pointerId) return;
+          drag.current = null;
+          setDragging(false);
+        }}
+        onKeyDown={(event) => {
+          const delta = MOVE_KEYS[event.key];
+          if (!delta) return;
+          event.preventDefault();
+          onMove(clampPosition({ x: location.x + delta.x, y: location.y + delta.y }, bounds));
+        }}
+      >
+        <GripHorizontalIcon aria-hidden="true" className="size-4 shrink-0" />
+        <span className="truncate">Value notes</span>
+      </button>
+      <Button size="icon-sm" variant="ghost" aria-label="New note" title="New note" disabled={!c.ready || c.notes.cards.length >= 200} onClick={createCard}><PlusIcon aria-hidden="true" /></Button>
       <div className="flex min-w-0 gap-1 overflow-x-auto" role="tablist" aria-label="Value notes">
-        <Button role="tab" aria-selected={tab === "document"} variant={tab === "document" ? "secondary" : "ghost"} size="sm" onClick={() => setTab("document")}>Notes · {c.notes.cards.length}</Button>
-        <Button role="tab" aria-selected={tab === "excerpts"} variant={tab === "excerpts" ? "secondary" : "ghost"} size="sm" onClick={() => setTab("excerpts")}><HighlighterIcon />Excerpts · {c.notes.excerpts.length}</Button>
+        <Button role="tab" aria-selected={tab === "document"} variant={tab === "document" ? "secondary" : "ghost"} size="xs" onClick={() => setTab("document")}>Notes · {c.notes.cards.length}</Button>
+        <Button role="tab" aria-selected={tab === "excerpts"} variant={tab === "excerpts" ? "secondary" : "ghost"} size="xs" onClick={() => setTab("excerpts")}>Excerpts · {c.notes.excerpts.length}</Button>
       </div>
+      <Button size="icon-sm" variant="ghost" aria-label="Close value notes" onClick={onClose}><XIcon /></Button>
     </header>
     {c.error && <div role="alert" className="border-b border-border p-3 text-xs text-destructive">{c.error}<Button variant="outline" size="xs" className="mt-2 block" onClick={c.retry}>Retry</Button>{c.ready && <><p className="mt-2">Copy any text you want to keep before discarding your draft.</p><Button variant="outline" size="xs" className="mt-2" onClick={() => void c.discardDraft()}>Discard draft & load saved</Button></>}</div>}
     {tab === "document" ? <div className="flex min-h-0 flex-1 flex-col" role="tabpanel">
-        <div className="shrink-0 px-4 pb-3 pt-4">
-          <Button variant="outline" className="h-9 w-full gap-2 rounded-xl border-border/70 bg-transparent text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground motion-reduce:transition-none" disabled={!c.ready || c.notes.cards.length >= 200} onClick={createCard}><PlusIcon aria-hidden="true" />New note</Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
+        <div className="min-h-0 flex-1 overflow-auto p-4">
         {!c.notes.cards.length && <div className="rounded-xl border border-dashed border-border px-5 py-10 text-center"><FileTextIcon className="mx-auto mb-3 size-6 text-muted-foreground" /><p className="text-sm font-medium">Space for your thinking</p><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Keep product ideas, user insights and plans in separate notes. Each card saves automatically.</p></div>}
         <div className="grid gap-3">{c.notes.cards.map((card) => {
           const expanded = selectedId === card.id;
