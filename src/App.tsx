@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
-import { NotesPanel } from "./components/NotesPanel";
+import { NotesPanel, type NotesPanelSize } from "./components/NotesPanel";
 import { useWorkspaceNotes } from "./lib/useWorkspaceNotes";
 import type { Excerpt } from "./notes";
 import { chatFrames } from "./lib/chatFrames";
@@ -240,6 +240,7 @@ function Loaded({
   const notes = useWorkspaceNotes(projectId, !manifest.demo);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesPosition, setNotesPosition] = useState<{ x: number; y: number } | null>(null);
+  const [notesSize, setNotesSize] = useState<NotesPanelSize>({ width: 360, height: 520 });
   const [noteSource, setNoteSource] = useState<Excerpt | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const chatTrigger = useRef<HTMLButtonElement>(null);
@@ -470,7 +471,9 @@ function Loaded({
           overlay={notesOpen && !manifest.demo && <NotesPanel
             controller={notes}
             position={notesPosition}
+            size={notesSize}
             onMove={setNotesPosition}
+            onResize={setNotesSize}
             onClose={() => setNotesOpen(false)}
             onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }}
           />}

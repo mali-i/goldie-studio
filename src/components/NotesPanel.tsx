@@ -1,10 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronDownIcon, CopyIcon, FileTextIcon, GripHorizontalIcon, HighlighterIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ChevronDownIcon, CopyIcon, FileTextIcon, GripHorizontalIcon, GripIcon, HighlighterIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import type { Excerpt, NoteCard } from "../notes";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import { Button } from "./ui/button";
 
 type Position = { x: number; y: number };
+export type NotesPanelSize = { width: number; height: number };
+
+const MIN_WIDTH = 260;
+const MIN_HEIGHT = 240;
 
 const MOVE_KEYS: Partial<Record<string, Position>> = {
   ArrowLeft: { x: -16, y: 0 },
@@ -20,33 +24,49 @@ function clampPosition(position: Position, bounds: Position): Position {
   };
 }
 
-export function NotesPanel({ controller: c, position, onMove, onClose, onSource }: {
+export function NotesPanel({ controller: c, position, size, onMove, onResize, onClose, onSource }: {
   controller: NotesController;
   position: Position | null;
+  size: NotesPanelSize;
   onMove: (position: Position) => void;
+  onResize: (size: NotesPanelSize) => void;
   onClose: () => void;
   onSource: (excerpt: Excerpt) => void;
 }) {
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ pointerId: number; offset: Position } | null>(null);
+  const resize = useRef<{ pointerId: number; pointer: Position; origin: Position; size: NotesPanelSize } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [bounds, setBounds] = useState<Position>({ x: 0, y: 0 });
+  const [canvas, setCanvas] = useState<NotesPanelSize>({ width: 0, height: 0 });
+  const width = Math.min(size.width, canvas.width);
+  const height = Math.min(size.height, canvas.height);
+  const bounds = { x: canvas.width - width, y: canvas.height - height };
   const location = clampPosition(position ?? { x: bounds.x, y: 0 }, bounds);
 
   useLayoutEffect(() => {
-    const element = panel.current;
-    const container = element?.parentElement;
-    if (!element || !container) return;
-    const measure = () => setBounds({
-      x: container.clientWidth - element.offsetWidth,
-      y: container.clientHeight - element.offsetHeight,
+    const container = panel.current?.parentElement;
+    if (!container) return;
+    const measure = () => setCanvas({
+      width: container.clientWidth,
+      height: container.clientHeight,
     });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
-    observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  const resizeFrom = (origin: Position, requested: NotesPanelSize) => {
+    const availableWidth = canvas.width - origin.x;
+    const availableHeight = canvas.height - origin.y;
+    const nextSize = {
+      width: Math.min(availableWidth, Math.max(MIN_WIDTH, requested.width)),
+      height: Math.min(availableHeight, Math.max(MIN_HEIGHT, requested.height)),
+    };
+    if (nextSize.width === width && nextSize.height === height) return;
+    onMove(origin);
+    onResize(nextSize);
+  };
 
   const [tab, setTab] = useState<"document" | "excerpts">("document");
   const [feedback, setFeedback] = useState("");
@@ -60,8 +80,8 @@ export function NotesPanel({ controller: c, position, onMove, onClose, onSource 
     setDeletingId(null);
   };
   return <aside ref={panel} id="value-notes" aria-label="Workspace value notes"
-    className="pointer-events-auto absolute flex h-[520px] max-h-full w-[360px] max-w-full flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar shadow-xl"
-    style={{ left: location.x, top: location.y }}
+    className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar shadow-xl"
+    style={{ left: location.x, top: location.y, width, height }}
   >
     <header className="shrink-0 border-b border-border p-2">
       <div className="mb-1 flex items-center gap-1">
@@ -71,7 +91,7 @@ export function NotesPanel({ controller: c, position, onMove, onClose, onSource 
           aria-label="Move Value notes with the arrow keys"
           className={`flex min-w-0 flex-1 touch-none select-none items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
           onPointerDown={(event) => {
-            if (event.button !== 0 || drag.current || !panel.current) return;
+            if (event.button !== 0 || drag.current || resize.current || !panel.current) return;
             const rect = panel.current.getBoundingClientRect();
             event.currentTarget.setPointerCapture(event.pointerId);
             drag.current = { pointerId: event.pointerId, offset: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
@@ -145,6 +165,43 @@ export function NotesPanel({ controller: c, position, onMove, onClose, onSource 
       {!c.notes.excerpts.length && <p className="py-6 text-sm leading-relaxed text-muted-foreground">Select text in a Codex reply and choose Highlight. Your excerpts will collect here.</p>}
       {c.notes.excerpts.map((e) => <article key={e.id} className="rounded-xl border border-border bg-background p-3"><p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{e.text}</p><div className="mt-3 flex flex-wrap gap-1"><Button size="xs" variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(e.text); setFeedback("Copied excerpt"); } catch { setFeedback("Could not copy. Select the excerpt text to copy manually."); } }}><CopyIcon />Copy</Button><Button size="xs" variant="ghost" onClick={() => onSource(e)}>View source</Button><Button size="xs" variant="ghost" onClick={() => c.update((n) => ({ ...n, excerpts: n.excerpts.filter((item) => item.id !== e.id) }))}>Remove highlight</Button></div></article>)}
     </div>}
-    <footer className="flex shrink-0 justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground" role="status"><span>{c.status}</span><span>{feedback}</span></footer>
+    <footer className="relative shrink-0 border-t border-border pl-4 pr-8 text-[11px] text-muted-foreground">
+      <div className="flex justify-between gap-2 py-2" role="status"><span>{c.status}</span><span>{feedback}</span></div>
+      <button
+        type="button"
+        title="Drag to resize Value notes, or focus and use the arrow keys"
+        aria-label="Resize Value notes with the arrow keys"
+        className="absolute bottom-0 right-0 grid size-7 cursor-nwse-resize touch-none select-none place-items-center rounded-tl-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+        onPointerDown={(event) => {
+          if (event.button !== 0 || drag.current || resize.current) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          resize.current = {
+            pointerId: event.pointerId,
+            pointer: { x: event.clientX, y: event.clientY },
+            origin: location,
+            size: { width, height },
+          };
+        }}
+        onPointerMove={(event) => {
+          const current = resize.current;
+          if (current?.pointerId !== event.pointerId) return;
+          resizeFrom(current.origin, {
+            width: current.size.width + event.clientX - current.pointer.x,
+            height: current.size.height + event.clientY - current.pointer.y,
+          });
+        }}
+        onLostPointerCapture={(event) => {
+          if (resize.current?.pointerId === event.pointerId) resize.current = null;
+        }}
+        onKeyDown={(event) => {
+          const delta = MOVE_KEYS[event.key];
+          if (!delta) return;
+          event.preventDefault();
+          resizeFrom(location, { width: width + delta.x, height: height + delta.y });
+        }}
+      >
+        <GripIcon aria-hidden="true" className="size-3.5" />
+      </button>
+    </footer>
   </aside>;
 }
