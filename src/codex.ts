@@ -1,6 +1,8 @@
+import type { ImageTarget } from "./image-edit";
 /** Public Studio/Codex contract. Credentials never cross this API. */
 export type CopyProposal = { headline: string; subhead: string };
 export type ChatFrameContext = { id: string; sceneId: string; label: string; headline: string; subhead: string };
+export type ChatImageEdit = { sceneId: string; slot: ImageTarget["slot"] | null; prompt: string; jobId?: string; error?: string };
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -11,6 +13,7 @@ export type ChatMessage = {
   frames?: ChatFrameContext[];
   status?: "completed" | "interrupted" | "failed";
   proposal?: CopyProposal | null;
+  imageEdit?: ChatImageEdit;
 };
 export type CodexConversation = { appRoot: string | null; lastAppRoot?: string; threadId?: string; messages: ChatMessage[] };
 export type CodexSession = CodexConversation & { id: string; title: string; createdAt: string; updatedAt: string };
@@ -19,6 +22,7 @@ export type CodexStatus = { available: boolean; authenticated: boolean; account:
 export type ChatInput = {
   sessionId?: string;
   message: string;
+  imageEditSlot?: ImageTarget["slot"];
   sceneId: string;
   locale: string;
   device: string;

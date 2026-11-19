@@ -31,12 +31,13 @@ export class ImageEdits {
   constructor(private provider?: Provider, private codex = new CodexImages()) {}
   status() { return this.provider ? Promise.resolve({ configured: true }) : this.codex.status(); }
   close() { this.codex.close(); }
-  async create(dir: string, target: ImageTarget, source: string, prompt: string) {
+  async create(dir: string, target: ImageTarget, source: string, prompt: string, expectedHash?: string) {
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 4000) throw new ImageEditError(422, 'Enter an instruction of 1–4000 characters.');
     if (this.active.has(dir)) throw new ImageEditError(409, 'An image edit is already running in this project.');
     this.active.add(dir);
     try {
       const bytes = await readImageAsset(dir, source);
+      if (expectedHash && digest(bytes) !== expectedHash) throw new ImageEditError(409, "Screenshot changed while Codex was replying. Send the edit again.");
       const id = randomUUID();
       const folder = `screenshots/ai/${id}`;
       await mkdir(join(dir, folder), { recursive: true });

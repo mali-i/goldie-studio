@@ -80,7 +80,6 @@ export function Strip({
   copy,
   onCopy,
   onSceneSelect,
-  onImageEdit,
   order,
   onReorder,
   template,
@@ -103,7 +102,6 @@ export function Strip({
   copy: Record<string, SceneCopy>;
   onCopy: (sceneId: string, field: "headline" | "subhead", text: string) => void;
   onSceneSelect?: (sceneId: string) => void;
-  onImageEdit?: (sceneId: string, slot: "primary" | "secondary") => void;
   /** Screenshot scene ids in display order; empty means the config's order. */
   order: string[];
   onReorder: (order: string[]) => void;
@@ -208,7 +206,6 @@ export function Strip({
     bad: boolean;
     badReason?: string;
     /** Whether the lightbox offers in-place copy editing (screenshots only). */
-    aiEdit?: (slot: "primary" | "secondary") => void;
     editable: boolean;
     /** Empty screen slots stay on the canvas but must not become exported store art. */
     exportable: boolean;
@@ -304,7 +301,6 @@ export function Strip({
           : needsSecondary && !secondary
             ? "This layout needs Screen 2 before exporting."
             : undefined,
-        aiEdit: onImageEdit ? (slot) => { setOpen(null); onImageEdit(scene.id, slot); } : undefined,
         editable: true,
         exportable,
         repositionable: Boolean(primary || secondary) && presentation?.objectFit !== "contain",
@@ -527,7 +523,6 @@ function Lightbox({
     key: string;
     width: number;
     height: number;
-    aiEdit?: (slot: "primary" | "secondary") => void;
     editable: boolean;
     exportable: boolean;
     repositionable: boolean;
@@ -625,7 +620,6 @@ function Lightbox({
       </div>
       <div className="flex w-full max-w-[900px] flex-col items-center gap-2 px-2 text-[11px] text-neutral-300">
         <div className="flex w-full flex-wrap items-center justify-center gap-3">
-          {entry.aiEdit && <Button size="sm" variant="secondary" onClick={() => entry.aiEdit?.(selectedSlot)}>AI edit screenshot</Button>}
           {entry.slotEditor ? (
             <div className="flex items-center gap-1">
               <Button type="button" size="sm" variant={mode === "image" ? "secondary" : "outline"}

@@ -39,6 +39,7 @@ test('task preserves source, persists result and handles failure and restart', a
   expect(await readImageAsset(folder, result.original)).toEqual(png(255));
   validateTransparentPng(await readImageAsset(folder, result.result!));
   const failures = new ImageEdits(async () => png(255));
+  await expect(failures.create(folder, target, 'screenshots/input.png', 'remove background', 'stale-hash')).rejects.toThrow('Screenshot changed');
   const failed = await failures.create(folder, target, 'screenshots/input.png', 'remove background');
   expect((await ready(failures, folder, failed.id)).status).toBe('failed');
   await expect(readImageAsset(folder, 'screenshots/../../escape')).rejects.toThrow('Invalid');

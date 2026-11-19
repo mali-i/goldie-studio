@@ -2,6 +2,8 @@ import { ArrowUpIcon, CodeXmlIcon, FolderOpenIcon, Loader2Icon, MessageSquareIco
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "radix-ui";
 import { codexJson, CodexRequestError, streamChat, type ChatInput, type ChatMessage, type CodexProject, type CodexStatus, type CopyProposal } from "../codex";
+import { ChatImageEdit, type ImagePreview } from "./ChatImageEdit";
+import type { ImageEditJob } from "../image-edit";
 import { HighlightText } from "./HighlightText";
 import type { NotesController } from "../lib/useWorkspaceNotes";
 import type { Excerpt } from "../notes";
@@ -10,7 +12,11 @@ import { ChatSessions } from "./ChatSessions";
 import { FrameComposer } from "./FrameComposer";
 import { Button } from "./ui/button";
 
-export function CodexPanel({ projectId, frames, context, onScene, onApply, onUndo, canUndo, onClose, notes, source }: {
+export function CodexPanel({ projectId, frames, context, onScene, onApply, onUndo, canUndo, onClose, notes, source, background, previewId, onImagePreview, onImageApplied }: {
+  background: string;
+  previewId?: string;
+  onImagePreview: (preview: ImagePreview | null) => void;
+  onImageApplied: () => void;
   notes: NotesController;
   source: Excerpt | null;
   projectId: string;
@@ -29,6 +35,10 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const [settings, setSettings] = useState(false);
   const [pickingDirectory, setPickingDirectory] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [imageHistory, setImageHistory] = useState<ImageEditJob[] | null>(null);
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [mode, setMode] = useState<"discuss" | "image">("discuss");
+  const [imageSlot, setImageSlot] = useState<"primary" | "secondary">("primary");
   const [draft, setDraft] = useState("");
   const [selectedFrameIds, setSelectedFrameIds] = useState<string[] | null>(null);
   const selectedFrames = selectedFrameIds === null
@@ -36,6 +46,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
     : selectedFrameIds.flatMap((id) => frames.filter((frame) => frame.id === id));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [imageAction, setImageAction] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [activity, setActivity] = useState("");
@@ -47,6 +58,8 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   const bottom = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const mounted = useRef(true);
+
+  useEffect(() => { onImagePreview(null); return () => onImagePreview(null); }, [base, project.activeSessionId, onImagePreview]);
 
   const reportError = (error: unknown) => {
     if (!mounted.current) return;
@@ -124,7 +137,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   const chooseDirectory = async () => {
-    if (pickingDirectory || busy || connecting) return;
+    if (pickingDirectory || busy || imageAction || connecting) return;
     setPickingDirectory(true); setError("");
     try {
       const result = await codexJson<{ appRoot: string | null }>(`${base}/pick-directory`, {}, "POST", 130_000);
@@ -134,22 +147,23 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
   };
 
   const changeSession = async (sessionId?: string) => {
-    if (busy || connecting) return;
+    if (busy || imageAction || connecting) return;
     setConnecting(true); setError("");
     try {
       const state = await codexJson<CodexProject>(`${base}/sessions`, sessionId ? { sessionId } : {});
       if (!mounted.current) return;
       setProject(state); setPath(state.appRoot ?? "");
       if (state.activeSessionId !== project.activeSessionId) setDraft("");
-      setApplied(null); setSourceError(""); setDirectoryOpen(false);
+      setApplied(null); setSourceError(""); setDirectoryOpen(false); setImageHistory(null);
     } catch (error) { viewedSource.current = source; reportError(error); }
     finally { if (mounted.current) setConnecting(false); }
   };
 
   const send = async () => {
-    if (!draft.trim() || !status?.authenticated || busy || connecting) return;
+    if (!draft.trim() || !status?.authenticated || busy || imageAction || connecting) return;
+    if (mode === "image" && new Set(selectedFrames.map((frame) => frame.sceneId)).size !== 1) { setError("请选择一个 Frame，再选择需要编辑的截图。"); return; }
     const primary = selectedFrames[0];
-    const input: ChatInput = { ...context, sessionId: project.activeSessionId, sceneId: primary?.sceneId ?? "", headline: primary?.headline ?? "", subhead: primary?.subhead ?? "", frames: selectedFrames, message: draft.trim() };
+    const input: ChatInput = { ...context, sessionId: project.activeSessionId, sceneId: primary?.sceneId ?? "", headline: primary?.headline ?? "", subhead: primary?.subhead ?? "", frames: selectedFrames, message: draft.trim(), ...(mode === "image" ? { imageEditSlot: imageSlot } : {}) };
     const optimistic: ChatMessage = { ...input, id: crypto.randomUUID(), role: "user", text: input.message };
     setProject((prev) => ({ ...prev, messages: [...prev.messages, optimistic] }));
     setDraft(""); setBusy(true); setError(""); setActivity("Connecting to Codex…");
@@ -185,7 +199,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
               <span className={`mr-2 inline-block size-1.5 rounded-full ${status?.authenticated ? "bg-emerald-500" : "bg-amber-500"}`} />
               {connecting ? "Connecting…" : serviceUnavailable ? "Studio service unavailable" : status?.authenticated ? "Connected" : status?.available ? "Sign in to Codex" : "Codex not connected"}
             </span>
-            <Button size="icon-xs" variant="ghost" disabled={busy || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
+            <Button size="icon-xs" variant="ghost" disabled={busy || imageAction || connecting} aria-label={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} title={serviceUnavailable ? "Retry Studio connection" : "Reconnect Codex"} onClick={async () => {
               setConnecting(true); setError("");
               try {
                 if (!serviceUnavailable) setStatus(await codexJson<CodexStatus>(`${base}/reconnect`, {}));
@@ -197,7 +211,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           </div>
         </div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
-          <Button size="icon-sm" variant="ghost" aria-label="New chat" title="New chat" disabled={busy || connecting || !project.activeSessionId} onClick={() => { setSettings(false); void changeSession(); }}><SquarePenIcon /></Button>
+          <Button size="icon-sm" variant="ghost" aria-label="New chat" title="New chat" disabled={busy || imageAction || connecting || !project.activeSessionId} onClick={() => { setSettings(false); void changeSession(); }}><SquarePenIcon /></Button>
           <Dialog.Root open={settings} onOpenChange={(open) => { if (pickingDirectory) return; if (open) setPath(project.appRoot ?? ""); setSettings(open); }}>
             <Dialog.Trigger asChild>
               <Button size="icon-sm" variant="ghost" className="relative" aria-label={project.appRoot ? "Manage linked app source" : "Link app source (optional)"} title={project.appRoot ? `App source: ${project.appRoot}` : "Link app source (optional)"}>
@@ -216,7 +230,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           <form id="app-project-settings" className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (path.trim() && !busy && !connecting && !pickingDirectory) void link(path.trim()); }}>
             <div className="space-y-1.5">
               <span className="block text-xs font-medium">App source directory</span>
-              <Button type="button" variant="outline" className="h-auto w-full justify-start gap-2 px-3 py-3 text-left" disabled={busy || connecting || pickingDirectory} onClick={() => void chooseDirectory()} aria-describedby="app-directory-help">
+              <Button type="button" variant="outline" className="h-auto w-full justify-start gap-2 px-3 py-3 text-left" disabled={busy || imageAction || connecting || pickingDirectory} onClick={() => void chooseDirectory()} aria-describedby="app-directory-help">
                 {pickingDirectory ? <Loader2Icon className="size-4 shrink-0 animate-spin" /> : <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />}
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs">{pickingDirectory ? "Choosing folder…" : path ? "Change folder" : "Choose folder"}</span>
@@ -228,10 +242,10 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
             {(project.appRoot || project.lastAppRoot) && <p className="text-[11px] text-muted-foreground">Unlinking keeps this conversation and stops further source reading. Previously read code remains in context. Linking a different app starts a new chat.</p>}
             {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between gap-2">
-              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || connecting || pickingDirectory} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
+              {project.appRoot ? <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={busy || imageAction || connecting || pickingDirectory} onClick={() => void link(null)}>Unlink project</Button> : <span className="text-[11px] text-muted-foreground">Read-only access</span>}
               <div className="flex items-center gap-1">
                 <Button type="button" size="sm" variant="ghost" disabled={connecting || pickingDirectory} onClick={() => { setPath(project.appRoot ?? ""); setSettings(false); }}>Cancel</Button>
-                <Button size="sm" disabled={busy || connecting || pickingDirectory || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
+                <Button size="sm" disabled={busy || imageAction || connecting || pickingDirectory || !path.trim() || path.trim() === project.appRoot}>{connecting && <Loader2Icon className="animate-spin" />}{project.appRoot ? "Save project" : "Link project"}</Button>
               </div>
             </div>
           </form>
@@ -243,12 +257,12 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
       </header>}
       {directoryOpen && <>
         <ChatSessions error={error} sessions={project.sessions ?? []} activeId={project.activeSessionId}
-          disabled={busy || connecting} onSelect={changeSession} onCreate={() => changeSession()} onBack={() => setDirectoryOpen(false)} />
+          disabled={busy || imageAction || connecting} onSelect={changeSession} onCreate={() => changeSession()} onBack={() => setDirectoryOpen(false)} />
         {busy && <p role="status" className="shrink-0 border-t border-border px-4 py-3 text-xs text-muted-foreground">A reply is running. Return to chat to stop it before switching conversations.</p>}
       </>}
       <div className={`${directoryOpen ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}>
       {(status?.available && !status.authenticated || loginUrl) && <div className="shrink-0 space-y-3 border-b border-sidebar-border p-4">
-        {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting} onClick={async () => {
+        {status?.available && !status.authenticated && <Button size="sm" variant="outline" disabled={connecting || imageAction} onClick={async () => {
           setConnecting(true); setError("");
           try { const result = await codexJson<{ authUrl: string }>(`${base}/login`, {}); setLoginUrl(result.authUrl); }
           catch (error) { reportError(error); }
@@ -257,13 +271,14 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         {loginUrl && <a className="block text-xs underline" href={loginUrl} target="_blank" rel="noreferrer">Continue sign-in in your browser ↗</a>}
       </div>}
       <div className={`min-h-0 flex-1 overflow-y-auto p-4 ${project.messages.length ? "space-y-4" : "flex flex-col"}`} role="log" aria-label="Project conversation">
-        {!project.messages.length && <div className="flex flex-1 flex-col items-center justify-center py-6 text-center text-sm leading-relaxed text-muted-foreground"><p>What should this Frame say?</p><p className="mt-2 max-w-64 text-xs">Discuss the benefit, check the implementation, or ask for a few directions. Codex can read your linked app to ground its suggestions.</p></div>}
+        {!project.messages.length && <div className="flex flex-1 flex-col items-center justify-center py-6 text-center text-sm leading-relaxed text-muted-foreground"><p>一起完善这个 Frame</p><p className="mt-2 max-w-64 text-xs">讨论文案，或描述你想对截图做的修改，例如“去掉白色点状背景，保留其他元素”。</p></div>}
         {sourceError && <p role="status" className="text-xs text-muted-foreground">{sourceError}</p>}
         {project.messages.map((message) => <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={`rounded-xl p-3 text-sm focus:outline-2 focus:outline-amber-400 ${message.role === "user" ? "ml-6 bg-muted" : "border border-border bg-background"}`}>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Codex"} · {message.frames?.map((frame) => frame.label).join(", ") || message.sceneId} · {message.locale}</p>
           {message.role === "assistant" ? <HighlightText text={message.text} disabled={!notes.ready} excerpts={notes.notes.excerpts.filter((e) => e.messageId === message.id)} onHighlight={(start, end) => {
             notes.update((n) => n.excerpts.some((e) => e.messageId === message.id && e.start === start && e.end === end) ? n : ({ ...n, excerpts: [...n.excerpts, { id: crypto.randomUUID(), messageId: message.id, start, end, text: message.text.slice(start, end), createdAt: new Date().toISOString() }] }));
           }} /> : <p className="whitespace-pre-wrap break-words leading-relaxed">{message.text}</p>}
+          {message.imageEdit && <ChatImageEdit projectId={projectId} message={message} sessionId={project.activeSessionId} disabled={busy || imageAction || connecting} background={background} previewId={previewId} onPreview={onImagePreview} onConversation={setProject} onApplied={onImageApplied} onBusy={setImageAction} />}
           {message.proposal && <div className="mt-3 space-y-2 border-t border-border pt-3">
             <p className="font-semibold">{message.proposal.headline}</p><p className="text-xs text-muted-foreground">{message.proposal.subhead}</p>
             <Button size="sm" variant="outline" disabled={message.sceneId !== context.sceneId || message.locale !== context.locale} onClick={() => {
@@ -276,8 +291,29 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
         <div ref={bottom} />
       </div>
       <form className="shrink-0 space-y-2 border-t border-sidebar-border p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant={mode === "discuss" ? "secondary" : "ghost"} disabled={busy || imageAction || connecting} onClick={() => setMode("discuss")}>讨论</Button>
+          <Button type="button" size="sm" variant={mode === "image" ? "secondary" : "ghost"} disabled={busy || imageAction || connecting} onClick={() => setMode("image")}>编辑图片</Button>
+          {mode === "image" && <select aria-label="Image editing screenshot" className="rounded border bg-background p-1 text-xs" value={imageSlot} disabled={busy || imageAction || connecting} onChange={(e) => setImageSlot(e.target.value as "primary" | "secondary")}><option value="primary">Screen 1</option><option value="secondary">Screen 2</option></select>}
+        </div>
+        <Button type="button" size="sm" variant="ghost" disabled={busy || imageAction || connecting || loadingImages} onClick={async () => {
+          if (imageHistory) { setImageHistory(null); return; }
+          setLoadingImages(true); setError("");
+          try { const history = await codexJson<{ jobs: ImageEditJob[] }>(`/api/projects/${encodeURIComponent(projectId)}/image-edits`); if (mounted.current) setImageHistory(history.jobs); }
+          catch (e) { reportError(e); } finally { if (mounted.current) setLoadingImages(false); }
+        }}>{loadingImages ? '正在读取…' : imageHistory ? '收起图片历史' : '图片历史'}</Button>
+        {imageHistory && <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2" aria-label="Saved image tasks">
+          {!imageHistory.length && <p className="text-xs text-muted-foreground">暂无图片任务。</p>}
+          {imageHistory.map((job) => <button type="button" key={job.id} disabled={busy || imageAction || connecting || loadingImages} className="block w-full rounded p-2 text-left text-xs hover:bg-muted disabled:opacity-50" onClick={async () => {
+            setLoadingImages(true); setConnecting(true); setError("");
+            try { const state = await codexJson<CodexProject>(`${base}/image-edit`, { sessionId: project.activeSessionId, jobId: job.id }); if (mounted.current) { setProject(state); setImageHistory(null); } }
+            catch (e) { reportError(e); } finally { if (mounted.current) { setLoadingImages(false); setConnecting(false); } }
+          }}>{job.target.sceneId} · Screen {job.target.slot === 'primary' ? 1 : 2} · {job.status}<span className="block truncate text-muted-foreground">{job.prompt}</span></button>)}
+        </div>}
+        {mode === "image" && <p className="text-[11px] text-muted-foreground">选择一个 Frame。发送后通过本机 Codex 生成候选图片，应用后才会替换截图。</p>}
+
         {error && <p role="alert" className="max-h-24 overflow-auto text-xs text-destructive">{error}</p>}
-        <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy || connecting}
+        <FrameComposer frames={frames} selected={selectedFrames} locale={context.locale} value={draft} disabled={!status?.authenticated || busy || imageAction || connecting}
           onChange={setDraft} onSelect={(frame) => { setSelectedFrameIds([...new Set([...selectedFrames.map((item) => item.id), frame.id])]); onScene(frame.sceneId); }}
           onRemove={(id) => setSelectedFrameIds(selectedFrames.filter((frame) => frame.id !== id).map((frame) => frame.id))} onSend={() => void send()} />
         {!selectedFrames.length && <p className="text-xs text-muted-foreground">Frames are optional. Type @ to add screenshot context.</p>}
@@ -286,7 +322,7 @@ export function CodexPanel({ projectId, frames, context, onScene, onApply, onUnd
           {busy ? <Button type="button" size="sm" variant="outline" onClick={async () => {
             try { await codexJson(`${base}/stop`, {}); setActivity("Stopping…"); }
             catch (error) { reportError(error); }
-          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || connecting}><ArrowUpIcon />Send</Button>}
+          }}><SquareIcon />Stop</Button> : <Button size="sm" disabled={!draft.trim() || !status?.authenticated || connecting || imageAction}><ArrowUpIcon />Send</Button>}
         </div>
       </form>
       </div>

@@ -40,8 +40,16 @@ const MAX_BODY_BYTES = 35 * 1024 * 1024;
 type Next = (err?: unknown) => void;
 
 export function workspacePlugin(workspaceRoot: string): Plugin {
-  const codex = new StudioCodex();
   const imageEdits = new ImageEdits();
+  const codex = new StudioCodex(undefined, undefined, {
+    async create(directory, target, prompt, expectedSource, expectedHash) {
+      const project = await readProject(resolve(workspaceRoot), directory.split(sep).pop()!);
+      const source = project.config.scenes.find((scene) => scene.id === target.sceneId)?.sources[target.device]?.[target.locale]?.[target.slot];
+      if (!source || (expectedSource && source !== expectedSource)) throw new HttpError(409, "The screenshot changed or is unavailable. Select the Frame and retry.");
+      return imageEdits.create(directory, target, source, prompt, expectedHash);
+    },
+    get: (directory, id) => imageEdits.get(directory, id),
+  });
   const close = () => { codex.close(); imageEdits.close(); };
   const handler = createHandler(resolve(workspaceRoot), codex, imageEdits);
   return {

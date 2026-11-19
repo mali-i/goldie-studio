@@ -9,8 +9,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageEditPanel } from "./components/ImageEditPanel";
-import type { ImageTarget } from "./image-edit";
+import type { ImagePreview } from "./components/ChatImageEdit";
 import { EmptyState } from "./components/EmptyState";
 import { NotesPanel, type NotesPanelSize } from "./components/NotesPanel";
 import { useWorkspaceNotes } from "./lib/useWorkspaceNotes";
@@ -79,7 +78,7 @@ export function App() {
   const [projectId, setProjectId] = useState(initialProjectId);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [revision, setRevision] = useState(0);
-  const [loaded, setLoaded] = useState<{ manifest: StoreManifest; design: SavedDesign } | null>(
+  const [loaded, setLoaded] = useState<{ projectId: string; manifest: StoreManifest; design: SavedDesign } | null>(
     null,
   );
   const [error, setError] = useState<Error | null>(null);
@@ -100,11 +99,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    setLoaded(null);
+    let live = true;
     setError(null);
     Promise.all([loadManifest(projectId), loadDesign(projectId)])
-      .then(([manifest, design]) => setLoaded({ manifest, design }))
-      .catch((e: Error) => setError(e));
+      .then(([manifest, design]) => { if (live) setLoaded({ projectId, manifest, design }); })
+      .catch((e: Error) => { if (live) setError(e); });
+    return () => { live = false; };
   }, [projectId, revision]);
 
   const selectProject = (id: string) => {
@@ -132,7 +132,7 @@ export function App() {
         body={error.message}
       />
     );
-  if (!loaded) return null;
+  if (!loaded || loaded.projectId !== projectId) return null;
   return (
     <Loaded
       key={projectId}
@@ -244,9 +244,16 @@ function Loaded({
   const [notesPosition, setNotesPosition] = useState<{ x: number; y: number } | null>(null);
   const [notesSize, setNotesSize] = useState<NotesPanelSize>({ width: 360, height: 520 });
   const [noteSource, setNoteSource] = useState<Excerpt | null>(null);
-  const [imageTarget, setImageTarget] = useState<ImageTarget | null>(null);
-  const [imagePreview, setImagePreview] = useState<{ target: ImageTarget; url: string } | null>(null);
-  const previewImage = useCallback((preview: { target: ImageTarget; url: string } | null) => setImagePreview(preview), []);
+  const [imagePreview, setImagePreview] = useState<ImagePreview | null>(null);
+  const previewImage = useCallback((preview: ImagePreview | null) => {
+    setImagePreview(preview);
+    if (preview) {
+      const targetDevice = manifest.devices.find((entry) => entry.key === preview.target.device);
+      if (targetDevice) { setPlatform(targetDevice.platform); setDevice(targetDevice.key); }
+      setLocale(preview.target.locale);
+      setChatScene(preview.target.sceneId);
+    }
+  }, [manifest.devices]);
   const [chatOpen, setChatOpen] = useState(false);
   const chatTrigger = useRef<HTMLButtonElement>(null);
   const [chatScene, setChatScene] = useState(design.scenes[0]?.id ?? "");
@@ -483,7 +490,6 @@ function Loaded({
             onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }}
           />}
           toolbarActions={!manifest.demo ? <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" disabled={!selectedScene} onClick={() => { setChatOpen(false); setImageTarget({ sceneId: selectedScene!.id, device, locale, slot: 'primary' }); }}>AI image editing</Button>
             <Button
               size="sm"
               variant="ghost"
@@ -504,7 +510,7 @@ function Loaded({
               className="h-9 gap-2.5 rounded-xl px-3.5 text-xs shadow-sm"
               aria-expanded={false}
               aria-controls="codex-panel"
-              onClick={() => { setImageTarget(null); setImagePreview(null); setChatOpen(true); }}
+              onClick={() => { setImagePreview(null); setChatOpen(true); }}
             >
               <span>Discuss with Codex</span>
               <PanelRightOpenIcon className="size-3.5 opacity-80" aria-hidden />
@@ -518,7 +524,6 @@ function Loaded({
                 captures={imagePreview && imagePreview.target.device === device && imagePreview.target.locale === locale ? {
                   ...captures, screenshots: captures.screenshots.map((shot) => shot.sceneId === imagePreview.target.sceneId && (shot.slot ?? 'primary') === imagePreview.target.slot ? { ...shot, url: imagePreview.url } : shot),
                 } : captures}
-                onImageEdit={!manifest.demo ? (sceneId, slot) => { setChatOpen(false); setImageTarget({ sceneId, device, locale, slot }); } : undefined}
                 spec={spec}
                 locale={locale}
                 background={background}
@@ -560,8 +565,12 @@ function Loaded({
         </PreviewCanvas>
       </div>
 
-      {imageTarget && !manifest.demo && <ImageEditPanel key={`${imageTarget.sceneId}:${imageTarget.device}:${imageTarget.locale}:${imageTarget.slot}`} projectId={projectId} initial={imageTarget} background={background} onPreview={previewImage} onClose={() => { setImageTarget(null); setImagePreview(null); }} onApplied={onAssetsChanged} />}
+
       {chatOpen && !manifest.demo && <CodexPanel
+        background={background}
+        previewId={imagePreview?.jobId}
+        onImagePreview={previewImage}
+        onImageApplied={onAssetsChanged}
         notes={notes}
         source={noteSource}
         projectId={projectId}
@@ -571,7 +580,7 @@ function Loaded({
         context={{ sceneId: selectedScene?.id ?? "", device, locale, headline: chatHeadline, subhead: chatSubhead }}
         onScene={setChatScene}
         onClose={() => {
-          setChatOpen(false);
+          setChatOpen(false); setImagePreview(null);
           requestAnimationFrame(() => chatTrigger.current?.focus());
         }}
         onUndo={undo}

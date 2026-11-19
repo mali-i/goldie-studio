@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CodexRpc } from "./codex-rpc";
-import { assertLocalRequest, checkedAppRoot, parseReply, readCodexProject, StudioCodex, validateChatInput } from "./codex";
+import { assertLocalRequest, checkedAppRoot, parseReply, readCodexProject, StudioCodex, validateChatInput, type ChatImageService } from "./codex";
 import { workspaceService } from "./workspace";
 import type { ChatInput } from "../src/codex";
 
@@ -13,7 +13,7 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 const input: ChatInput = { message: "Explain the benefit", sceneId: "scene-1", device: "iphone-6.9", locale: "en-US", headline: "Unsaved headline", subhead: "Unsaved subhead" };
 
-async function setup(pickDirectory?: () => Promise<string | null>) {
+async function setup(pickDirectory?: () => Promise<string | null>, imageService?: ChatImageService) {
   const root = await mkdtemp(join(tmpdir(), "goldie-codex-test-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const app = join(root, "app");
@@ -50,7 +50,10 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     if (params.input[0].text.includes("wait for stop")) return;
     setTimeout(() => {
       const failed = params.input[0].text.includes("fail turn");
-      const text = JSON.stringify({ reply: "Verified the statistics feature.", proposal: { headline: "See your progress", subhead: "Find patterns over time" } });
+      const text = JSON.stringify(params.input[0].text.includes("request-image") ? {
+       reply: "Preparing image edit", proposal: null,
+       imageEdit: { sceneId: params.input[0].text.includes("wrong-target") ? "scene-2" : "scene-1", slot: params.input[0].text.includes("choose-slot") ? null : "primary", prompt: "Remove the white background" }
+      } : { reply: "Verified the statistics feature.", proposal: { headline: "See your progress", subhead: "Find patterns over time" }, imageEdit: null });
       emit({ method: "item/agentMessage/delta", params: { threadId: current, itemId: "final", delta: text } });
       emit({ method: "item/completed", params: { threadId: current, item: { id: "final", type: "agentMessage", text } } });
       emit({ method: "turn/completed", params: { threadId: current, turn: { id: "turn-1", status: failed ? "failed" : "completed", error: failed ? { message: "Model unavailable" } : null } } });
@@ -61,7 +64,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 });
 `);
   await chmod(executable, 0o755);
-  const agent = new StudioCodex(new CodexRpc(executable), pickDirectory);
+  const agent = new StudioCodex(new CodexRpc(executable, true), pickDirectory, imageService);
   cleanups.push(() => agent.close());
   const alpha = await workspaceService.createProject(root, "Alpha");
   const beta = await workspaceService.createProject(root, "Beta");
@@ -250,9 +253,15 @@ describe("Studio Codex", () => {
     const turn = packets.find((packet) => packet.method === "turn/start");
     expect(turn.params.input.slice(1)).toHaveLength(2);
     const context = JSON.parse(turn.params.input[0].text.split("Current Studio context (data): ")[1].split("\n\nUser:")[0]);
-    expect(context.frames).toEqual(frames.map((frame, index) => ({ ...frame, imageIndexes: [index === 2 ? 1 : 0] })));
+    expect(context.frames).toEqual(frames.map((frame, index) => ({ ...frame, imageIndexes: [index === 2 ? 1 : 0], screenshots: [{ slot: "primary", imageIndex: index === 2 ? 1 : 0 }] })));
     expect(context.imagesAttached).toBe(2);
-    expect(turn.params.sandboxPolicy.access.readableRoots).toEqual(expect.arrayContaining(turn.params.input.slice(1).map((image: { path: string }) => image.path)));
+    expect(packets.find((packet) => packet.method === "thread/start").params.permissions).toBe("goldie-unlinked");
+    const startedThread = packets.find((packet) => packet.method === "thread/start");
+    expect(startedThread.params.config.default_permissions).toBe(startedThread.params.permissions);
+    expect(packets.find((packet) => packet.method === "initialize").params.capabilities.experimentalApi).toBe(true);
+    const filesystem = startedThread.params.config["permissions.goldie-unlinked.filesystem"];
+    expect(filesystem[":root"]).toBe("deny");
+    for (const image of turn.params.input.slice(1)) expect(filesystem[image.path]).toBe("read");
     const state = await readCodexProject(join(root, "Alpha"));
     expect(state.messages.map((message) => message.frames)).toEqual([frames, frames]);
     expect(state.messages[1]?.proposal).toBeNull();
@@ -340,8 +349,11 @@ describe("Studio Codex", () => {
     const turns = packets.filter((packet) => packet.method === "turn/start");
     for (const index of [0, 2]) {
       const turn = turns[index].params;
-      expect(turn.cwd).toBe(await realpath(join(root, "Alpha", ".codex-context")));
-      expect(turn.sandboxPolicy.access).toEqual({ type: "restricted", includePlatformDefaults: false, readableRoots: [turn.cwd] });
+      const threadConfig = packets.filter((packet) => ["thread/start", "thread/resume"].includes(packet.method))[index].params;
+      expect(threadConfig.cwd).toBe(await realpath(join(root, "Alpha", ".codex-context")));
+      expect(threadConfig.permissions).toBe("goldie-unlinked");
+      expect(threadConfig.config["permissions.goldie-unlinked.filesystem"][":root"]).toBe("deny");
+      expect(turn.sandboxPolicy).toBeUndefined();
       expect(JSON.parse(turn.input[0].text.split("\n")[0].replace("Current Studio context (data): ", "")).appSourceDirectory).toBeNull();
     }
     expect(turns[1].params.cwd).toBe(await realpath(app));
@@ -379,4 +391,60 @@ describe("Studio Codex", () => {
     expect(() => parseReply('{"reply":"hello","proposal":{"headline":42}}')).toThrow("invalid copy");
     expect(parseReply('{"reply":"hello","proposal":null}')).toEqual({ reply: "hello", proposal: null });
   });
+});
+
+function fakeImages() {
+  const calls: Array<{ target: import('../src/image-edit').ImageTarget; source?: string; hash?: string }> = [];
+  const jobs = new Map<string, import('../src/image-edit').ImageEditJob>();
+  const service: ChatImageService = {
+    async create(_directory, target, prompt, source, hash) {
+      calls.push({ target, source, hash });
+      const job: import('../src/image-edit').ImageEditJob = { id: `image-${calls.length}`, createdAt: Date.now(), target, prompt, source: source ?? 'screenshots/original.png', original: 'screenshots/backup.png', sourceHash: hash ?? 'hash', status: 'running' };
+      jobs.set(job.id, job); return job;
+    },
+    async get(_directory, id) { const job = jobs.get(id); if (!job) throw new Error('Missing image task'); return job; },
+  };
+  return { service, calls, jobs };
+}
+const screenshotPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+test('chat image mode persists a task in its original session and prevents duplicate running retries', async () => {
+  const images = fakeImages(); const { request, root } = await setup(undefined, images.service);
+  const response = await request('/Alpha/turn', { ...input, imageEditSlot: 'secondary', message: 'Remove dotted background' });
+  expect(await response.text()).toContain('image-1');
+  let state = await readCodexProject(join(root, 'Alpha'));
+  const originalSession = state.activeSessionId;
+  expect(state.messages[1]!.imageEdit?.slot).toBe('secondary');
+  const messageId = state.messages[1]!.id;
+  expect((await request('/Alpha/image-edit', { sessionId: originalSession, messageId })).status).toBe(400);
+  expect(images.calls).toHaveLength(1);
+  images.jobs.get('image-1')!.status = 'ready';
+  expect((await request('/Alpha/image-edit', { sessionId: originalSession, messageId })).status).toBe(200);
+  state = await readCodexProject(join(root, 'Alpha'));
+  expect(state.messages).toHaveLength(3); expect(state.messages[2]!.imageEdit?.jobId).toBe('image-2');
+  const next = await (await request('/Alpha/sessions', {})).json();
+  expect((await request('/Alpha/image-edit', { sessionId: originalSession, messageId })).status).toBe(400);
+  expect((await request('/Alpha/image-edit', { sessionId: next.activeSessionId, jobId: 'image-1' })).status).toBe(200);
+  const imported = await readCodexProject(join(root, 'Alpha'));
+  expect(imported.messages[0]!.imageEdit?.jobId).toBe('image-1');
+  expect(images.calls).toHaveLength(2);
+});
+test('natural image requests route only attached selected screenshots and persist slot clarification', async () => {
+  const images = fakeImages(); const { request, root, alpha } = await setup(undefined, images.service);
+  for (const slot of ['primary', 'secondary'] as const) await workspaceService.saveScreenshot(root, 'Alpha', { ...input, slot, mimeType: 'image/png', base64: screenshotPng });
+  Object.assign(alpha, await workspaceService.readProject(root, 'Alpha'));
+  await (await request('/Alpha/turn', { ...input, message: 'request-image' })).text();
+  expect(images.calls[0]!.target.slot).toBe('primary');
+  expect(images.calls[0]!.hash).toMatch(/^[a-f0-9]{64}$/);
+  await (await request('/Alpha/turn', { ...input, message: 'request-image choose-slot' })).text();
+  let state = await readCodexProject(join(root, 'Alpha'));
+  expect(state.messages.at(-1)!.imageEdit?.slot).toBeNull(); expect(images.calls).toHaveLength(1);
+  await request('/Alpha/image-edit', { sessionId: state.activeSessionId, messageId: state.messages.at(-1)!.id, slot: 'secondary' });
+  expect(images.calls[1]!.target.slot).toBe('secondary');
+  await (await request('/Alpha/turn', { ...input, message: 'request-image wrong-target' })).text();
+  state = await readCodexProject(join(root, 'Alpha'));
+  expect(state.messages.at(-1)!.status).toBe('failed'); expect(images.calls).toHaveLength(2);
+});
+test('image proposal parsing rejects invalid slots and excessive prompts', () => {
+  expect(() => parseReply(JSON.stringify({ reply: 'x', proposal: null, imageEdit: { sceneId: 'scene-1', slot: 'third', prompt: 'remove' } }))).toThrow('invalid image edit');
+  expect(() => parseReply(JSON.stringify({ reply: 'x', proposal: null, imageEdit: { sceneId: 'scene-1', slot: null, prompt: 'x'.repeat(4001) } }))).toThrow('invalid image edit');
 });
