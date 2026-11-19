@@ -32,7 +32,7 @@ export class CodexRpc {
   private pending = new Map<number | string, Pending>();
   private listeners = new Set<(packet: Packet) => void>();
 
-  constructor(private executable = process.env.GOLDIE_CODEX_BIN) {}
+  constructor(private executable = process.env.GOLDIE_CODEX_BIN, private experimentalApi = false) {}
 
   async connect() {
     if (!this.ready) {
@@ -86,7 +86,7 @@ export class CodexRpc {
     child.stdin.on("error", () => failed(new Error("Codex disconnected. Reconnect and try again.")));
     child.on("exit", (code, signal) => failed(new Error(`Codex exited${signal ? ` (${signal})` : code === null ? "" : ` (${code})`}. Check the CLI setup and access to its state directory, then reconnect.`)));
     if (!child.pid) throw new Error("Codex could not start. Install Codex CLI or set GOLDIE_CODEX_BIN to its executable.");
-    await this.request("initialize", { clientInfo: { name: "goldie_studio", title: "Goldie Studio", version: "0.1.0" } });
+    await this.request("initialize", { clientInfo: { name: "goldie_studio", title: "Goldie Studio", version: "0.1.0" }, ...(this.experimentalApi ? { capabilities: { experimentalApi: true } } : {}) });
     child.stdin.write(JSON.stringify({ method: "initialized" }) + "\n");
   }
 

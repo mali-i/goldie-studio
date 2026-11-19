@@ -1,131 +1,176 @@
 # Goldie Studio
 
-Goldie Studio is a self-contained, upload-first Vite application. It starts
-with bundled demo data and does not require a simulator, capture flow, or
-generated manifest.
+Goldie Studio 是一个以截图上传为起点、可独立运行的 Vite 应用。项目内置演示数据，无需启动模拟器、运行截图采集流程或预先生成 manifest。
+
+## 快速开始
 
 ```bash
 bun install
 bun run dev
 ```
 
-Open <http://localhost:4321>. Demo design changes are saved in browser local
-storage. Create a project from the project picker, upload PNG, JPEG or WebP
-screenshots, adjust the design, and export a ZIP directly in the browser.
+打开 [http://localhost:4321](http://localhost:4321)。演示项目的设计修改保存在浏览器本地存储中。
 
-Each project lives under `workspace/<project-name>/` with its own managed
-`goldie.config.ts` and `screenshots/` directory. `workspace/` is ignored by
-Git. Unsafe path characters in a project name are replaced with `-`, and a
-numeric suffix distinguishes duplicate names. Set `GOLDIE_STUDIO_WORKSPACE`
-to store projects somewhere else.
+在项目选择器中创建项目，上传 PNG、JPEG 或 WebP 格式的 App 截图，调整宣传图设计，然后直接在浏览器中导出 ZIP。
 
-## Discuss screenshot copy with Codex (local preview)
+画布中的一张 App 宣传图称为 **Frame**。Frame 可以包含标题、副标题、背景、设备边框，以及一张或多张上传的 App 截图。
 
-Open a workspace project and choose **Discuss with Codex** above the canvas.
-In **App source**, use **Choose folder** to open the macOS native folder picker.
-Select a source folder, then choose **Link project** (or **Save project**) to
-confirm. Cancelling the picker keeps the existing selection and source link.
-Linking your app's source directory is optional. You can also
-chat using screenshots and descriptions alone. Studio starts its own
-`codex app-server` process and uses the local Codex authentication/provider
-configuration; no API key is stored in the browser. If needed, choose
-**Sign in with ChatGPT** and follow the browser link, or authenticate with
-the Codex CLI first. Studio checks your PATH and, on macOS, the bundled Codex
-executable in an installed ChatGPT app. To select another executable, start
-Studio with `GOLDIE_CODEX_BIN=/absolute/path/to/codex bun run dev`. A missing
-or invalid executable shows a connection error without stopping the web server.
+## 项目与文件存储
 
-A **Frame** is one App promotional image on the canvas. Type **@** in the
-assistant’s message box to choose a Frame from the current canvas. Type to
-filter, use arrow keys and Enter to select, or Escape to dismiss. The selected
-Frames appear above the message. Repeat **@** to add more Frames; already
-selected Frames are excluded from the list. Each tag has an **×** to remove
-that reference. All selected Frames, their current copy, and their uploaded
-screenshots are included in the turn. When discussing multiple scenes, copy
-suggestions appear in the reply rather than a single ambiguous Apply action.
-Before explicitly choosing references, opening a promotional image on the
-canvas sets the initial Frame. Each message also includes the current device
-and language.
-Codex can read relevant app code to ground its suggestions. Tool activity
-appears while it works. Replies render Markdown headings, emphasis, lists,
-quotes, links, tables, and code blocks. Wide tables and code scroll horizontally;
-text highlighting still points to the original reply, including existing excerpts.
-The conversational reply and optional copy proposal
-appear when the turn finishes. **Apply copy** changes both text fields in one
-undo step and follows the existing autosave/export flow. Use **Undo last edit**
-or the editor's Cmd/Ctrl+Z to undo. **Stop** interrupts an active reply;
-**Reconnect Codex** restarts a disconnected runtime.
+每个项目保存在 `workspace/<项目名称>/`，拥有独立的 `goldie.config.ts` 和 `screenshots/` 目录。`workspace/` 已加入 Git 忽略规则。
 
-Each Studio project persists multiple chats and the active chat ID in
-`workspace/<project>/goldie.codex.json`. Use **New chat** to start a separate
-conversation. Click the speech-bubble icon in the panel header to switch to the conversation
-directory. Select a chat or use **Back to chat** to return. The directory replaces
-the chat view without taking up space above messages. History is grouped by
-Today, Yesterday, and Earlier. Search titles, messages, or linked app names to
-find a chat; the list shows message previews and marks the active chat.
-Each chat has its own linked
-directory, Codex thread ID and messages; its title comes from the first message.
-Empty drafts are excluded from the conversation directory and its count until
-a user message has been accepted and saved. Repeated **New chat** clicks reuse
-the empty draft. Leaving an empty draft for
-another conversation removes it from history; chats with accepted messages stay
-saved, including failed or interrupted replies.
-New chats inherit the current source link, with an empty history and a new Codex
-thread on first send. Reloading restores the active chat. Existing single-chat
-files migrate automatically on the next save. Excerpt source links also switch
-to the original chat. Stop an active reply before creating or switching chats.
-Linking source for the first time or unlinking it preserves the
-conversation. While unlinked, source reading is disabled; previously read code
-remains in conversation context. Linking a different app starts a new chat and
-keeps the previous chat in history, including when the previous app was unlinked first.
-Closing the panel or leaving the project stops its active reply.
+项目名称中不适合用作路径的字符会替换为 `-`；重名项目通过数字后缀区分。可以通过环境变量 `GOLDIE_STUDIO_WORKSPACE` 指定其他工作区目录。
 
-This preview uses read-only Codex sessions, rejects approval escalations,
-and disables inherited MCP servers/plugins for these sessions. The directory
-is a working directory, not a filesystem read-isolation boundary when linked.
-Unlinked turns restrict filesystem reads to an empty context directory and the
-attached screenshots. Relevant
-source code and screenshots are sent to the configured model provider. The
-Codex endpoints accept only same-origin requests on a loopback host. The
-bundled demo does not connect to Codex. This is a local integration; a hosted
-Web version still needs a local connector and a suitable authentication flow.
-Commercial/hosted distribution must use supported API authentication or the
-app's own approved [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
-integration rather than reusing local Codex-managed authentication.
+主要文件如下：
 
-`bun run build` includes both frontend and server type checks. `bun test`
-includes a deterministic stdio Codex fixture and temporary localhost HTTP
-servers; these tests do not call a model or use real credentials.
+| 路径 | 用途 |
+| --- | --- |
+| `goldie.config.ts` | 项目配置与设计状态 |
+| `screenshots/` | 上传的截图素材 |
+| `screenshots/ai/<任务 ID>/` | AI 图片编辑任务、输入快照和生成结果 |
+| `goldie.codex.json` | Codex 会话与当前会话 ID |
+| `goldie.notes.json` | 工作区笔记、历史版本和摘录 |
 
-## Origins & acknowledgments
+## AI 截图编辑（本地预览版）
 
-Goldie Studio began as a fork of
-[Goldie](https://github.com/software-mansion-labs/goldie) by Software Mansion.
-It has since evolved into an independently maintained project focused on
-uploading, editing, and exporting screenshots. The repository is no longer
-part of the original project's GitHub fork network.
+使用 AI 去除 App 截图的背景，将保留的前景元素融入 Frame 背景。Frame 的文案、背景、设备边框以及裁剪和布局设置继续独立管理。
 
-Thanks to the original authors and contributors for their work.
-See [LICENSE](LICENSE) for the license and attribution details.
+### 配置图片服务
 
-### Workspace value notes
+图片编辑通过本机的 `codex app-server` 调用内置 `image_gen` 工具，使用本机 Codex 登录与模型提供方配置，无需单独设置 `OPENAI_API_KEY` 或图片模型环境变量。
 
-Open **Value notes** above the canvas to collect your thinking across the whole
-workspace. **Notes** is a collection of cards. Open a card to edit its title and
-text in the floating window, then choose **‹ Notes** to return to the list.
-Every card saves automatically and keeps up to 20 previous text
-versions available to restore. Existing single-document notes and their history
-are preserved in a **Current understanding** card.
+请先通过 Codex CLI 登录，或打开 Studio 的 **Discuss with Codex（与 Codex 讨论）** 面板，使用 **Sign in with ChatGPT（使用 ChatGPT 登录）**。如需指定 Codex 可执行文件，可设置 `GOLDIE_CODEX_BIN`。
 
-Select text in a Codex reply and choose **Highlight**. The highlighted passage
-appears in **Excerpts**, where you can copy it, return to its source, or remove
-the highlight. Excerpts keep a text snapshot even if linking a different app
-starts a new conversation. Notes belong to the workspace, independently of any
-screenshot, device or language. There are no annotations or automatic document
-insertion in this MVP.
+图片编辑面板会检查本机 Codex 的登录状态和模型提供方的图片能力。点击 **Recheck local Codex（重新检查本机 Codex）** 可在登录或更新配置后重新检查。
 
-Notes are stored in each project folder as `goldie.notes.json`, separately from
-design config and chat history. Unsaved edits also have a browser-local recovery
-draft. Saving errors are shown with a retry action; conflicting edits from another
-window are rejected instead of silently overwritten. If a conflict occurs, copy
-your draft before reloading and reconcile it with the saved version.
+每个图片任务使用独立的临时 Codex 会话，与文案讨论历史分开。Studio 发送所选截图和指令，接收原生 `imageGeneration` 图片结果，再进行透明校验与保存。图片编辑会话使用只读模式、拒绝权限提升，并禁用继承的 MCP 服务和插件。
+
+本机 Codex 仍会将截图和指令发送给其配置的模型服务，使用对应账号或提供方的用量。只有点击 **Generate（生成）** 才会发起生成。模型提供方声明支持图片生成，并不保证当前账号或会话一定暴露图片工具；若工具不可用，面板会显示错误，不会自动切换到独立图片 API。
+
+### 使用流程
+
+1. 打开工作区项目，点击画布顶部的 **AI image editing（AI 图片编辑）**；也可以打开某张 Frame，点击 **AI edit screenshot（AI 编辑截图）**。
+2. 选择 Frame，以及 **Screen 1 / Screen 2（截图 1 / 截图 2）**。
+3. 输入编辑指令，或使用移除白色点状背景的快捷指令。
+4. 点击 **Generate（生成）**，等待候选结果。
+5. 检查预览，点击 **Apply to Frame（应用到 Frame）** 保存，或关闭面板放弃本次临时预览。
+
+内置指令示例：
+
+> 去除这张 App 截图的白色点状背景，将该区域设为透明。保留所有文字、图标、按钮、卡片及其内部颜色，保持原有位置、尺寸和内容不变。不要把前景元素中的白色区域一起删除。
+
+### 预览、应用与恢复
+
+| 操作 | 说明 |
+| --- | --- |
+| **Frame** | 在当前 Frame 中预览候选结果 |
+| **Transparency（透明度）** | 使用棋盘格检查透明区域 |
+| **Original（原图）** | 对比该任务保存的输入快照 |
+| **Apply to Frame（应用到 Frame）** | 将截图引用切换到生成结果 |
+| **Restore original（恢复原图）** | 恢复该任务的输入快照 |
+| **Saved versions（已保存版本）** | 重新打开此前的任务与结果 |
+| **Generate again（重新生成）** | 使用当前指令发起新任务 |
+
+生成结果会先作为候选在画布中展示，应用前不会保存新的截图引用。关闭面板会清除临时预览。如果源截图在生成后被替换，服务端会拒绝应用旧任务的结果，避免覆盖后续修改。
+
+### 后台任务与结果校验
+
+每个项目同时只运行一个图片编辑任务。Codex 图片编辑任务的等待上限为十分钟，超时会尝试中断当前生成。
+
+关闭面板不会取消后台任务，可以重新打开查看进度。重启服务端会中断尚未完成的任务，需要重新生成。已完成的结果与输入快照保存在 `workspace/<项目>/screenshots/ai/<任务 ID>/`。
+
+服务端只接受同时包含可见像素和透明像素的 PNG 结果。透明结果不会使用截图容器原有的实色填充、边框和矩形阴影，以便透出 Frame 背景。画布与导出使用同一套合成逻辑。
+
+### 当前限制
+
+当前采用生成式图片编辑，文字、图标和几何布局仍可能发生变化。此版本尚未提供逐像素保真的分割蒙版或手动蒙版修正，应用前应仔细检查候选结果。
+
+生成截图内部的元素仍属于同一张图片，不能逐个修改其文字、按钮或图标；Frame 自身的标题、背景和设备边框继续独立编辑。
+
+## 与 Codex 讨论截图文案（本地预览版）
+
+打开工作区项目，点击画布顶部的 **Discuss with Codex（与 Codex 讨论）**。
+
+### 登录与关联源码
+
+关联 App 源码目录是可选的，也可以只使用截图和文字描述进行讨论。
+
+在 **App source（App 源码）** 中，点击 **Choose folder（选择文件夹）**，通过 macOS 原生文件夹选择器选中源码目录，再点击 **Link project（关联项目）** 或 **Save project（保存项目）** 确认。取消选择会保留原来的选择与关联。
+
+Studio 会启动独立的 `codex app-server` 进程，使用本机 Codex 的认证和模型提供方配置，不会将 API Key 保存在浏览器中。如需登录，可点击 **Sign in with ChatGPT（使用 ChatGPT 登录）** 并按照浏览器提示操作，也可以先通过 Codex CLI 完成认证。
+
+Studio 会检查 PATH 中的 Codex 可执行文件；在 macOS 上，还会检查已安装 ChatGPT 应用内附带的 Codex。可以通过下面的方式指定其他路径：
+
+```bash
+GOLDIE_CODEX_BIN=/absolute/path/to/codex bun run dev
+```
+
+可执行文件缺失或不可用时，界面会提示连接错误，但不会停止 Web 服务。
+
+### 引用 Frame 与应用文案
+
+在输入框中键入 **@**，选择当前画布上的 Frame。继续输入可筛选，使用方向键和 Enter 选择，按 Escape 关闭列表。
+
+已选 Frame 显示在输入框上方。可以重复输入 **@** 添加更多引用，已选项不会重复出现在列表中；点击标签的 **×** 移除引用。
+
+每轮对话会附带所选 Frame、当前文案、上传的截图、设备和语言。在尚未主动选择引用时，打开画布中的宣传图会设置初始 Frame。讨论多个场景时，各场景的文案建议会放在回复中，不提供指向不明确的单一应用操作。
+
+Codex 可以读取关联 App 的相关源码，为文案建议提供依据。执行期间会显示工具活动，结束后展示回复及可选的文案提案。回复支持 Markdown 标题、强调、列表、引用、链接、表格和代码块，宽表格与代码可横向滚动。文字高亮及已有摘录仍对应原始回复。
+
+**Apply copy（应用文案）** 会一次更新标题和副标题，记为一个撤销步骤，并沿用现有的自动保存和导出流程。使用 **Undo last edit（撤销上次编辑）** 或编辑器中的 Cmd/Ctrl+Z 撤销。
+
+**Stop（停止）** 可中断当前回复；**Reconnect Codex（重新连接 Codex）** 可重启已断开的运行时。
+
+### 多会话与历史记录
+
+每个项目将多个会话及当前会话 ID 保存在 `workspace/<项目>/goldie.codex.json` 中。
+
+- 点击 **New chat（新建会话）** 开始独立对话。
+- 点击面板顶部的气泡图标进入会话目录；选择会话或点击 **Back to chat（返回会话）** 返回聊天视图。
+- 历史记录按今天、昨天和更早分组，可按标题、消息或关联 App 名称搜索。列表展示消息预览并标记当前会话。
+- 每个会话独立保存源码关联、Codex 线程 ID 和消息，标题来自第一条用户消息。
+- 空白草稿在用户消息被接受并保存前，不显示在历史目录中，也不计入数量。反复点击新建会话会复用空白草稿，切换到其他会话后会移除空白草稿。
+- 已接受用户消息的会话会保留，包括回复失败或被中断的会话。
+
+新会话继承当前源码关联，拥有空白历史，并在首次发送消息时创建新的 Codex 线程。刷新后恢复当前会话；旧版单会话文件会在下次保存时自动迁移。点击摘录来源时，也会切换到原始会话。
+
+新建或切换会话前，需要先停止正在进行的回复。首次关联源码或取消关联会保留当前对话。取消关联后停止读取源码，但之前已经读取的代码仍在会话上下文中。
+
+关联另一个 App 时会开启新会话，并保留之前的会话；即使中间取消过关联，也会识别这种切换。关闭面板或离开项目会停止当前回复。
+
+### 本地集成与访问边界
+
+当前文案讨论功能使用只读 Codex 会话，拒绝权限提升，并禁用会话继承的 MCP 服务和插件。关联的源码目录是工作目录，并不构成文件系统读取的隔离边界。
+
+未关联源码时，文件读取限制在空白上下文目录及附带的截图范围内。相关源码与截图会发送给已配置的模型提供方。Codex 接口只接受本地回环地址上的同源请求；内置演示项目不会连接 Codex。
+
+当前实现面向本地运行。托管 Web 版本仍需要本地连接器与合适的认证流程。商业或托管分发应使用受支持的 API 认证，或应用自身获准的 [Sign in with ChatGPT 集成](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)，不能直接复用本机 Codex 管理的认证信息。
+
+## 工作区笔记与摘录
+
+点击画布顶部的 **Value notes（价值笔记）**，整理整个工作区的思考。
+
+**Notes（笔记）** 以卡片形式组织。打开卡片后，可以在浮动窗口中编辑标题和正文，点击 **‹ Notes** 返回列表。每张卡片自动保存，保留最多 20 个可恢复的正文历史版本。旧版单文档笔记及其历史会保存在 **Current understanding（当前理解）** 卡片中。
+
+选中 Codex 回复中的文字，点击 **Highlight（高亮）**，即可保存到 **Excerpts（摘录）**。摘录支持复制、返回来源和移除。即使关联其他 App 后开启新会话，摘录仍保留文字快照。
+
+笔记属于整个项目工作区，不依赖某张截图、设备或语言。当前版本不提供批注或自动插入文档功能。
+
+笔记独立保存在项目目录中的 `goldie.notes.json`，与设计配置、聊天历史分开。未保存的修改也会在浏览器中保留恢复草稿。保存失败时可重试；来自其他窗口的冲突修改会被拒绝，不会静默覆盖。发生冲突时，请先复制草稿，再刷新并与已保存版本合并。
+
+## 构建与测试
+
+```bash
+bun run build
+bun test
+```
+
+`bun run build` 包含前端与服务端的类型检查，并生成前端构建产物。
+
+`bun test` 包含模拟 Codex stdio 进程、临时 localhost HTTP 服务，以及图片编辑流程的测试。测试使用模拟 Codex 图片事件和图片服务，不调用真实模型，也不使用真实凭证。
+
+## 项目来源与致谢
+
+Goldie Studio 最初基于 Software Mansion 的 [Goldie](https://github.com/software-mansion-labs/goldie) 项目分支开发，现已演进为独立维护的项目，专注于截图上传、编辑和导出。本仓库已脱离原项目的 GitHub fork 网络。
+
+感谢原作者及贡献者的工作。许可证与署名信息见 [LICENSE](LICENSE)。

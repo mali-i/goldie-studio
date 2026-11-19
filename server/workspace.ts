@@ -12,6 +12,8 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Plugin } from "vite";
+import { ImageEdits, ImageEditError, digest, readImageAsset } from "./image-edit";
+import type { ImageTarget } from "../src/image-edit";
 import { StudioCodex } from "./codex";
 import { readNotes, saveNotes, NotesError } from "./notes";
 import type { WorkspaceNotes } from "../src/notes";
@@ -39,22 +41,24 @@ type Next = (err?: unknown) => void;
 
 export function workspacePlugin(workspaceRoot: string): Plugin {
   const codex = new StudioCodex();
-  const handler = createHandler(resolve(workspaceRoot), codex);
+  const imageEdits = new ImageEdits();
+  const close = () => { codex.close(); imageEdits.close(); };
+  const handler = createHandler(resolve(workspaceRoot), codex, imageEdits);
   return {
     name: "goldie-workspace",
     configureServer(server) {
       server.middlewares.use(handler);
-      server.httpServer?.once("close", () => codex.close());
+      server.httpServer?.once("close", close);
     },
     configurePreviewServer(server) {
       server.middlewares.use(handler);
-      server.httpServer?.once("close", () => codex.close());
+      server.httpServer?.once("close", close);
     },
-    closeBundle() { codex.close(); },
+    closeBundle() { close(); },
   };
 }
 
-function createHandler(root: string, codex: StudioCodex) {
+function createHandler(root: string, codex: StudioCodex, imageEdits: ImageEdits) {
   return async (req: IncomingMessage, res: ServerResponse, next: Next) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/projects")) return next();
@@ -78,6 +82,44 @@ function createHandler(root: string, codex: StudioCodex) {
       }
 
       const action = parts[3];
+      if (action === "image-edits") {
+        if (req.method === "POST" && !req.headers["content-type"]?.startsWith("application/json")) throw new HttpError(415, "Expected application/json.");
+        const host = req.headers.host ?? "";
+        if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host) ||
+            (req.headers.origin && req.headers.origin !== `http://${host}` && req.headers.origin !== `https://${host}`) ||
+            req.headers["sec-fetch-site"] === "cross-site") throw new HttpError(403, "Image editing requires a same-origin local request.");
+        const dir = projectDir(root, id);
+        const project = await readProject(root, id);
+        if (parts.length === 4 && req.method === "GET") {
+          const folders = await readdir(join(dir, "screenshots/ai")).catch(() => [] as string[]);
+          const jobs = await Promise.all(folders.filter((name) => /^[a-f0-9-]{36}$/.test(name)).map((name) => imageEdits.get(dir, name).catch(() => null)));
+          return sendJson(res, { ...await imageEdits.status(), jobs: jobs.filter((job) => job !== null).sort((a, b) => b.createdAt - a.createdAt) });
+        }
+        if (parts.length === 4 && req.method === "POST") {
+          const body = await readJson<ImageTarget & { prompt: string }>(req);
+          const { sceneId, device, locale, slot } = body;
+          if (slot !== "primary" && slot !== "secondary") throw new HttpError(422, "Invalid screenshot slot.");
+          const source = project.config.scenes.find((scene) => scene.id === sceneId)?.sources[device]?.[locale]?.[slot];
+          if (!source) throw new HttpError(404, "Upload a screenshot before editing.");
+          return sendJson(res, await imageEdits.create(dir, { sceneId, device, locale, slot }, source, body.prompt), 202);
+        }
+        const job = await imageEdits.get(dir, parts[4] ?? "");
+        if (parts.length === 5 && req.method === "GET") return sendJson(res, job);
+        if (parts.length === 6 && parts[5] === "apply" && req.method === "POST") {
+          const body = await readJson<{ restore?: boolean; expectedSource: string }>(req);
+          if (job.status !== "ready" || !job.result) throw new HttpError(409, "No image result is ready.");
+          const { sceneId, device, locale, slot } = job.target;
+          const scene = project.config.scenes.find((item) => item.id === sceneId);
+          const current = scene?.sources[device]?.[locale]?.[slot];
+          if (!scene || current !== body.expectedSource ||
+              ![job.source, job.result, job.original].includes(current ?? "")) throw new HttpError(409, "The screenshot changed. Reopen AI edit before applying.");
+          if (current === job.source && digest(await readImageAsset(dir, current)) !== job.sourceHash) throw new HttpError(409, "The original screenshot changed. Generate again.");
+          scene.sources[device]![locale]![slot] = body.restore ? job.original : job.result;
+          await writeConfig(root, id, project.config);
+          return sendJson(res, await touchProject(root, id, project.config.store.name));
+        }
+        return methodNotAllowed(res);
+      }
       if (action === "notes" && parts.length === 4) {
         await readProject(root, id);
         if (req.method === "GET") return sendJson(res, await readNotes(projectDir(root, id)));
@@ -162,7 +204,7 @@ function createHandler(root: string, codex: StudioCodex) {
       res.statusCode = 404;
       res.end("Not found");
     } catch (error) {
-      res.statusCode = error instanceof HttpError || error instanceof NotesError ? error.status : 500;
+      res.statusCode = error instanceof HttpError || error instanceof NotesError || error instanceof ImageEditError ? error.status : 500;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
@@ -515,6 +557,7 @@ async function deleteScene(root: string, id: string, sceneId: string): Promise<P
 
   await writeConfig(root, id, config);
   for (const file of unused) {
+    if (file.startsWith(join(projectDir(root, id), "screenshots/ai") + sep)) continue;
     await rm(file, { force: true }).catch((error) => {
       // The scene is already gone; a cleanup failure must not look like a failed deletion.
       console.warn("Could not clean up a deleted scene's screenshot:", error);
@@ -668,7 +711,7 @@ async function saveScreenshot(
   const file = safeProjectPath(root, id, relativePath);
   await mkdir(dirname(file), { recursive: true });
   await atomicWrite(file, bytes);
-  if (previous && previous !== relativePath) await rm(safeProjectPath(root, id, previous), { force: true });
+  if (previous && previous !== relativePath && !previous.startsWith("screenshots/ai/")) await rm(safeProjectPath(root, id, previous), { force: true });
   scene.sources[input.device] = {
     ...scene.sources[input.device],
     [input.locale]: { ...scene.sources[input.device]?.[input.locale], [slot]: relativePath },
@@ -690,7 +733,7 @@ async function deleteScreenshot(
   const scene = config.scenes.find((candidate) => candidate.id === sceneId);
   const source = scene?.sources[device]?.[locale]?.[requestedSlot];
   if (!scene || !source) throw new HttpError(404, "Screenshot not found.");
-  await rm(safeProjectPath(root, id, source), { force: true });
+  if (!source.startsWith("screenshots/ai/")) await rm(safeProjectPath(root, id, source), { force: true });
   delete scene.sources[device]![locale]![requestedSlot];
   if (Object.keys(scene.sources[device]![locale]!).length === 0) delete scene.sources[device]![locale];
   if (Object.keys(scene.sources[device]!).length === 0) delete scene.sources[device];

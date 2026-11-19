@@ -8,7 +8,9 @@ import {
   TabletIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageEditPanel } from "./components/ImageEditPanel";
+import type { ImageTarget } from "./image-edit";
 import { EmptyState } from "./components/EmptyState";
 import { NotesPanel, type NotesPanelSize } from "./components/NotesPanel";
 import { useWorkspaceNotes } from "./lib/useWorkspaceNotes";
@@ -242,6 +244,9 @@ function Loaded({
   const [notesPosition, setNotesPosition] = useState<{ x: number; y: number } | null>(null);
   const [notesSize, setNotesSize] = useState<NotesPanelSize>({ width: 360, height: 520 });
   const [noteSource, setNoteSource] = useState<Excerpt | null>(null);
+  const [imageTarget, setImageTarget] = useState<ImageTarget | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ target: ImageTarget; url: string } | null>(null);
+  const previewImage = useCallback((preview: { target: ImageTarget; url: string } | null) => setImagePreview(preview), []);
   const [chatOpen, setChatOpen] = useState(false);
   const chatTrigger = useRef<HTMLButtonElement>(null);
   const [chatScene, setChatScene] = useState(design.scenes[0]?.id ?? "");
@@ -478,6 +483,7 @@ function Loaded({
             onSource={(excerpt) => { setNoteSource({ ...excerpt }); setChatOpen(true); }}
           />}
           toolbarActions={!manifest.demo ? <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={!selectedScene} onClick={() => { setChatOpen(false); setImageTarget({ sceneId: selectedScene!.id, device, locale, slot: 'primary' }); }}>AI image editing</Button>
             <Button
               size="sm"
               variant="ghost"
@@ -498,7 +504,7 @@ function Loaded({
               className="h-9 gap-2.5 rounded-xl px-3.5 text-xs shadow-sm"
               aria-expanded={false}
               aria-controls="codex-panel"
-              onClick={() => setChatOpen(true)}
+              onClick={() => { setImageTarget(null); setImagePreview(null); setChatOpen(true); }}
             >
               <span>Discuss with Codex</span>
               <PanelRightOpenIcon className="size-3.5 opacity-80" aria-hidden />
@@ -509,7 +515,10 @@ function Loaded({
             <div className="w-full">
               <Strip
                 design={design}
-                captures={captures}
+                captures={imagePreview && imagePreview.target.device === device && imagePreview.target.locale === locale ? {
+                  ...captures, screenshots: captures.screenshots.map((shot) => shot.sceneId === imagePreview.target.sceneId && (shot.slot ?? 'primary') === imagePreview.target.slot ? { ...shot, url: imagePreview.url } : shot),
+                } : captures}
+                onImageEdit={!manifest.demo ? (sceneId, slot) => { setChatOpen(false); setImageTarget({ sceneId, device, locale, slot }); } : undefined}
                 spec={spec}
                 locale={locale}
                 background={background}
@@ -551,6 +560,7 @@ function Loaded({
         </PreviewCanvas>
       </div>
 
+      {imageTarget && !manifest.demo && <ImageEditPanel key={`${imageTarget.sceneId}:${imageTarget.device}:${imageTarget.locale}:${imageTarget.slot}`} projectId={projectId} initial={imageTarget} background={background} onPreview={previewImage} onClose={() => { setImageTarget(null); setImagePreview(null); }} onApplied={onAssetsChanged} />}
       {chatOpen && !manifest.demo && <CodexPanel
         notes={notes}
         source={noteSource}
